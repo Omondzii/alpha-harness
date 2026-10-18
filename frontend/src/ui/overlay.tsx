@@ -15,8 +15,8 @@ import { cn } from '@/lib/cn'
 import type { Choice } from '@/lib/scope'
 import { Button } from './kit'
 
-/** Behind every modal: the page dims and blurs, so what floats is the only thing in focus. */
-export const BACKDROP = 'fixed inset-0 z-50 bg-black/60 backdrop-blur-sm'
+/** Behind every modal: the page dims, so what floats is the only thing in focus. */
+export const BACKDROP = 'fixed inset-0 z-50 bg-black/60'
 
 interface DialogProps {
   open: boolean

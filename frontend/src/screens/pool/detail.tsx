@@ -2,8 +2,9 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { MaximizeIcon } from 'lucide-react'
+import { CopyIcon, MaximizeIcon } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { ApiError, errorMessage } from '@/api/http'
 import { fmt, isNum } from '@/lib/format'
 import { alpha, notApplicable } from '@/screens/alpha/api'
@@ -31,11 +32,32 @@ const KIND_LABEL: Record<Kind, string> = {
 }
 
 export function DetailSheet({ alphaId, onClose }: { alphaId: string | null; onClose: () => void }) {
+  const copyId = () => {
+    if (alphaId) {
+      navigator.clipboard.writeText(alphaId)
+      toast.success(`Copied ${alphaId}`)
+    }
+  }
+
   return (
     <Sheet
       open={alphaId !== null}
       onOpenChange={(o) => !o && onClose()}
-      title={<span className="num">{alphaId ?? 'Alpha'}</span>}
+      title={
+        <div className="flex items-center gap-2">
+          <span className="num">{alphaId ?? 'Alpha'}</span>
+          {alphaId && (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              onClick={copyId}
+              aria-label={`Copy ${alphaId}`}
+            >
+              <CopyIcon className="size-3.5" />
+            </Button>
+          )}
+        </div>
+      }
     >
       {alphaId && <Body key={alphaId} alphaId={alphaId} />}
     </Sheet>

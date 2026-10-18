@@ -86,9 +86,8 @@ export function Dialog({ open, onOpenChange, className, ...frame }: DialogProps)
 /** A right-hand detail panel. */
 export function Sheet({ open, onOpenChange, className, container, ...frame }: DialogProps) {
   return (
-    <BDialog.Root open={open} onOpenChange={(next) => onOpenChange(next)}>
+    <BDialog.Root modal={false} open={open} onOpenChange={(next) => onOpenChange(next)}>
       <BDialog.Portal container={container}>
-        <BDialog.Backdrop className={BACKDROP} />
         <BDialog.Popup
           className={cn(
             'fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl flex-col border-l border-hairline-strong bg-surface-1 shadow-float outline-none',

@@ -7,6 +7,7 @@ import { useState } from 'react'
 import { ApiError, errorMessage } from '@/api/http'
 import { fmt, isNum } from '@/lib/format'
 import { alpha, notApplicable } from '@/screens/alpha/api'
+import { PropertiesPanel } from '@/screens/alpha/properties'
 import { type AlphaSettings, pool } from '@/screens/pool/api'
 import { PnlChart } from '@/screens/pool/pnl-chart'
 import {
@@ -72,11 +73,93 @@ function Body({ alphaId }: { alphaId: string }) {
     queryFn: () => pool.detail(alphaId),
     retry: false,
   })
+  const page = useQuery({
+    queryKey: ['alpha', alphaId, 'page'],
+    queryFn: () => alpha.page(alphaId),
+    retry: false,
+    enabled: detail.data !== undefined,
+  })
   const [kinds, setKinds] = useState<Kind[]>([])
 
-  if (detail.isPending) return <Skeleton className="h-60" />
+  if (detail.isPending || (detail.data && page.isPending)) return <Skeleton className="h-60" />
   if (detail.isError) return <ErrorNotice error={detail.error} title="Could not load this Alpha" />
   const d = detail.data
+  const alphaInfo = page.data?.alpha
+
+  if (page.isError) {
+    return (
+      <div className="flex flex-col gap-4">
+        <AstInspector expression={d.expression} />
+        <ErrorNotice error={page.error} title="Could not load alpha properties" />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="primary"
+            render={<Link to="/alpha/$alphaId" params={{ alphaId: d.alphaId }} />}
+          >
+            <MaximizeIcon aria-hidden />
+            Open Full Page
+          </Button>
+          <OpenInBrain url={d.brainUrl} />
+          <RecheckButton alphaId={d.alphaId} />
+          <AlphaActionsMenu alphaId={d.alphaId} />
+        </div>
+        <PnlSection alphaId={d.alphaId} />
+        <Section title="Settings">
+          <KV items={settingsItems(d.settings)} />
+        </Section>
+        <Section
+          title="Submission Checks"
+          description="As BRAIN last reported them. Pending checks resolve with Re-check on BRAIN."
+        >
+          {d.checks.length === 0 ? (
+            <p className="text-body-compact text-ink-subtle">No checks stored.</p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-hairline-subtle">
+              {d.checks.map((c, i) => (
+                <li
+                  key={`${c.name}-${i}`}
+                  className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-1.5 text-body"
+                >
+                  <Badge tone={checkTone(c.result ?? 'PENDING')}>{c.result ?? 'PENDING'}</Badge>
+                  <span className="num text-ink">{c.name}</span>
+                  {isNum(c.value) && (
+                    <span className="num text-body-compact text-ink-subtle">
+                      {checkFigure(c.name, c.value)}
+                      {isNum(c.limit) && ` / ${checkFigure(c.name, c.limit)}`}
+                    </span>
+                  )}
+                  {c.message && (
+                    <span className="basis-full text-body-compact break-words text-ink-subtle">
+                      {c.message}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+        <Section
+          title="Correlations"
+          description="BRAIN rate-limits these checks hourly, so each one loads only when you ask."
+          actions={(['self', 'prod'] as Kind[]).map((k) => (
+            <Button
+              key={k}
+              size="sm"
+              disabled={kinds.includes(k)}
+              onClick={() => setKinds([...kinds, k])}
+            >
+              {KIND_LABEL[k]}
+            </Button>
+          ))}
+        >
+          {kinds.map((k) => (
+            <CorrelationResult key={k} alphaId={alphaId} kind={k} />
+          ))}
+        </Section>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -151,6 +234,8 @@ function Body({ alphaId }: { alphaId: string }) {
           <CorrelationResult key={k} alphaId={alphaId} kind={k} />
         ))}
       </Section>
+
+      {alphaInfo && <PropertiesPanel alpha={alphaInfo} />}
     </div>
   )
 }

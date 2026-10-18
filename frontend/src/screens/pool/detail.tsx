@@ -237,7 +237,11 @@ function Body({ alphaId }: { alphaId: string }) {
         ))}
       </Section>
 
-      {alphaInfo && <PropertiesPanel alpha={alphaInfo} />}
+      {page.isPending ? (
+        <Skeleton className="h-80" label="Loading properties" />
+      ) : (
+        alphaInfo && <PropertiesPanel alpha={alphaInfo} />
+      )}
     </div>
   )
 }

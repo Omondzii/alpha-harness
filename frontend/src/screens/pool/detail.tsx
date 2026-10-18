@@ -77,11 +77,13 @@ function Body({ alphaId }: { alphaId: string }) {
     queryKey: ['alpha', alphaId, 'page'],
     queryFn: () => alpha.page(alphaId),
     retry: false,
+    // Lazy load: only start fetching after detail is loaded
     enabled: detail.data !== undefined,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   })
   const [kinds, setKinds] = useState<Kind[]>([])
 
-  if (detail.isPending || (detail.data && page.isPending)) return <Skeleton className="h-60" />
+  if (detail.isPending) return <Skeleton className="h-60" />
   if (detail.isError) return <ErrorNotice error={detail.error} title="Could not load this Alpha" />
   const d = detail.data
   const alphaInfo = page.data?.alpha

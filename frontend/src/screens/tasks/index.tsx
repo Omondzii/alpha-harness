@@ -449,6 +449,7 @@ export function TasksScreen() {
             }
             loading={list.isPending}
             error={list.error}
+            maxHeight="30vh"
           />
         )}
       </Panel>

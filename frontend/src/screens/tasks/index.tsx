@@ -26,6 +26,7 @@ import { MAX_SIMULATIONS } from '@/screens/research-labs/lab-task'
 import { type LabTask, labTasks, type RankedAlpha } from '@/screens/tasks/api'
 import {
   AFTER_COST_HEADER,
+  ALPHA_ID,
   DELAY,
   INVESTABILITY,
   QuickBadge,
@@ -156,12 +157,11 @@ const setting = (key: string, header: string, width: string): Column<RankedAlpha
  */
 const SAMPLER_COLUMNS: Column<RankedAlpha>[] = [
   {
-    key: 'number',
-    header: 'Trial',
-    width: '120px',
+    ...ALPHA_ID,
+    width: '140px',
     cell: (r) => (
       <span className="num flex items-center gap-1.5 text-ink-subtle">
-        {r.number}
+        {ALPHA_ID.cell(r)}
         <QuickBadge alpha={r} />
       </span>
     ),

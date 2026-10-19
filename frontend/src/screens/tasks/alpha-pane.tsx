@@ -26,8 +26,20 @@ import { type Column, DataTable, type Sort } from '@/ui/table'
 
 const WORKFLOW = 'power-pool-workflow'
 const PROD_JOB = 'prod-correlation'
+const VIEWED_ALPHAS_KEY = 'alpha-harness:viewed-alphas'
 
 type Stored = RankedAlpha & { alphaId: string }
+
+function readViewedAlphaIds(): Set<string> {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(VIEWED_ALPHAS_KEY) ?? '[]')
+    return new Set(
+      Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string') : [],
+    )
+  } catch {
+    return new Set()
+  }
+}
 
 /** Step 1: not on the platform yet. */
 const isUnsubmitted = (r: RankedAlpha): r is Stored => Boolean(r.alphaId) && !r.submitted
@@ -108,9 +120,10 @@ function useJob(kind: string) {
  * somewhere else".
  */
 const openRow =
-  (onOpen: ((alphaId: string) => void) | undefined) =>
+  (onOpen: ((alphaId: string) => void) | undefined, onView: (alphaId: string) => void) =>
   (r: RankedAlpha, event: React.MouseEvent | React.KeyboardEvent) => {
     if (!r.alphaId) return
+    onView(r.alphaId)
     if (event.ctrlKey || event.metaKey) {
       event.preventDefault()
       window.open(BRAIN_ALPHA_URL(r.alphaId), '_blank', 'noopener,noreferrer')
@@ -151,6 +164,25 @@ export function AlphaPane({
 }) {
   const [showAll, setShowAll] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [viewedIds, setViewedIds] = useState(readViewedAlphaIds)
+  const saveViewedIds = (next: Set<string>) => {
+    setViewedIds(next)
+    try {
+      localStorage.setItem(VIEWED_ALPHAS_KEY, JSON.stringify([...next]))
+    } catch {
+      // Keep the state usable for this session when browser storage is unavailable.
+    }
+  }
+  const markViewed = (alphaId: string) => {
+    if (viewedIds.has(alphaId)) return
+    saveViewedIds(new Set([...viewedIds, alphaId]))
+  }
+  const toggleViewed = (alphaId: string) => {
+    const next = new Set(viewedIds)
+    if (next.has(alphaId)) next.delete(alphaId)
+    else next.add(alphaId)
+    saveViewedIds(next)
+  }
   const unsubmitted = useMemo(() => rows.filter(isUnsubmitted), [rows])
   const clean = useMemo(() => unsubmitted.filter(isClean), [unsubmitted])
   const cleanIds = useMemo(() => clean.map((r) => r.alphaId), [clean])
@@ -228,7 +260,31 @@ export function AlphaPane({
   const unsynced = pool.found?.scopes.flatMap((s) => s.poolWithoutPnl).length ?? 0
   const uncosted = survivors.filter((r) => r.afterCostSharpe == null).length
   const columnsShown = () => {
-    const own = columns()
+    const own: Column<RankedAlpha>[] = [
+      {
+        key: 'viewed',
+        header: 'Viewed',
+        width: '68px',
+        cell: (r) => {
+          const alphaId = r.alphaId
+          if (!alphaId) return DASH
+          const viewed = viewedIds.has(alphaId)
+          return (
+            <input
+              type="checkbox"
+              className="size-3.5"
+              checked={viewed}
+              aria-label={`Mark ${alphaId} as ${viewed ? 'unviewed' : 'viewed'}`}
+              title={viewed ? 'Mark as unviewed' : 'Mark as viewed'}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+              onChange={() => toggleViewed(alphaId)}
+            />
+          )
+        },
+      },
+      ...columns(),
+    ]
     if (!pool.found) return own
     const at = own.findIndex((c) => c.key === poolColumnAfter)
     const cut = at === -1 ? own.length : at + 1
@@ -344,7 +400,7 @@ export function AlphaPane({
         rows={sorted}
         columns={columnsShown()}
         rowKey={(r) => String(r.trialId)}
-        onRowClick={openRow(onOpenAlpha)}
+        onRowClick={openRow(onOpenAlpha, markViewed)}
         rowClass={(r) =>
           r.alphaId === activeAlphaId ? 'bg-primary-subtle hover:bg-primary-subtle' : undefined
         }

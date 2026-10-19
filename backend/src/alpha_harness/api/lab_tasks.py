@@ -159,6 +159,7 @@ class RankedAlpha(Out):
     trial_id: int
     #: Its place in the sweep, as queued.
     number: int
+    warning_count: int
     alpha_id: str | None
     color: str | None = None
     expression: str | None

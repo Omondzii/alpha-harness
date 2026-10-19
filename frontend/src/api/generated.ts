@@ -4294,6 +4294,8 @@ export interface components {
             turnover: number | null;
             /** Value */
             value: number;
+            /** Warningcount */
+            warningCount: number;
         };
         /** @enum {string} */
         Reasoning: "quick" | "normal" | "careful" | "deep";
@@ -5040,6 +5042,8 @@ export interface components {
             turnover: number | null;
             /** Value */
             value: number;
+            /** Warningcount */
+            warningCount: number;
         };
         /** TaskChange */
         TaskChange: {

@@ -30,6 +30,7 @@ import {
   setting,
   TRUNCATION,
   taskStatus,
+  WARNING_COUNT,
 } from '@/screens/tasks/columns'
 import { Button, Empty, ErrorNotice, KV, Metric, Page, PageHeader, Panel, Skeleton } from '@/ui/kit'
 import { type Column, DataTable, type Sort } from '@/ui/table'
@@ -44,6 +45,7 @@ const columns = (agent: boolean): Column<RankedAlpha>[] => [
   ...SETTING_COLUMNS,
   ...(agent ? [TRUNCATION] : []),
   PROD_CORRELATION,
+  WARNING_COUNT,
   FAILED_CHECKS,
   ...METRIC_COLUMNS,
 ]
@@ -170,7 +172,7 @@ function CheckSets({ rows }: { rows: RankedAlpha[] }) {
 export function TaskResultsScreen() {
   const { taskId } = useParams({ from: '/tasks/$taskId' })
   const id = Number(taskId)
-  const [sort, setSort] = useState<Sort>({ key: 'sharpe', desc: true })
+  const [sort, setSort] = useState<Sort>({ key: 'warningCount', desc: false })
   const [alphaId, setAlphaId] = useState<string | null>(null)
 
   const tasks = useQuery({ queryKey: ['lab-tasks'], queryFn: labTasks.list })

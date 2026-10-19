@@ -160,6 +160,15 @@ export const FAILED_CHECKS: Column<RankedAlpha> = {
     ),
 }
 
+export const WARNING_COUNT: Column<RankedAlpha> = {
+  key: 'warningCount',
+  header: 'Warnings',
+  width: 'minmax(76px,0.6fr)',
+  align: 'right',
+  sortable: true,
+  cell: (r) => <span className="num">{fmt.int(r.warningCount)}</span>,
+}
+
 /** Per row, for a sweep whose Truncation Agent set it market by market. */
 export const TRUNCATION: Column<RankedAlpha> = {
   key: 'truncation',

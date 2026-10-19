@@ -653,12 +653,19 @@ def ranked(
         if current and t.alpha_id in current:
             result = {**result, "checks": current[t.alpha_id]}
         stats = result.get("stats") or {}
+        checks = result.get("checks") or []
+        warning_count = sum(
+            str(check.get("result", "")).upper() == "WARNING"
+            for check in checks
+            if isinstance(check, dict)
+        )
         rows.append(
             {
                 "trialId": t.id,
                 # Its place in the sweep, 0-based, as the task queued it.
                 "number": t.number,
                 "alphaId": t.alpha_id,
+                "warningCount": warning_count,
                 "expression": t.expression,
                 "settings": t.settings,
                 "value": value,

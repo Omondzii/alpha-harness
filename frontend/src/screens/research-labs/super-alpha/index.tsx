@@ -1,6 +1,7 @@
 /** Super Alpha Lab: SuperAlphas built from your own submitted Alphas, every pairing in one task. */
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { XIcon } from 'lucide-react'
 import { useState } from 'react'
 import type { components } from '@/api/generated'
 import { http } from '@/api/http'
@@ -8,6 +9,7 @@ import { fmt } from '@/lib/format'
 import { REGION_AGNOSTIC, useScope, useScopeOptions } from '@/lib/scope'
 import { AddTaskButtons, useAddTask } from '@/screens/research-labs/add-task'
 import {
+  Button,
   Disclosure,
   ErrorNotice,
   Field,
@@ -19,6 +21,7 @@ import {
   PageHeader,
   Panel,
   Segmented,
+  Textarea,
 } from '@/ui/kit'
 import { Select } from '@/ui/overlay'
 import { ScopePicker } from '@/ui/scope-picker'
@@ -35,6 +38,7 @@ const ACTIVATIONS: { value: NonNullable<Activation>; label: string }[] = [
 const CORES = [1, 2, 3].map((n) => ({ value: n, label: String(n) }))
 const MIN_LIMIT = 10
 const MAX_LIMIT = 200
+const MAX_CUSTOM_RECIPES = 5
 
 export function SuperAlphaLabScreen() {
   const [scope, setScope] = useScope('/labs/super-alpha')
@@ -43,6 +47,12 @@ export function SuperAlphaLabScreen() {
   const [limit, setLimit] = useState(30)
   const [activation, setActivation] = useState<NonNullable<Activation>>('BOTH')
   const [cores, setCores] = useState(3)
+  const [selectionName, setSelectionName] = useState('')
+  const [selectionCode, setSelectionCode] = useState('')
+  const [comboName, setComboName] = useState('')
+  const [comboCode, setComboCode] = useState('')
+  const [customSelections, setCustomSelections] = useState<Schemas['Recipe'][]>([])
+  const [customCombos, setCustomCombos] = useState<Schemas['Recipe'][]>([])
 
   // BRAIN's own list for the market; Subindustry first where it has one, as most Alphas use it.
   const neutralization = options.neutralizations.some((n) => n.value === picked)
@@ -60,10 +70,12 @@ export function SuperAlphaLabScreen() {
     selectionLimit: limit,
     activation,
     cores,
+    customSelections,
+    customCombos,
   }
 
   const plan = useQuery({
-    queryKey: ['super-lab', 'plan', limitValid ? limit : MIN_LIMIT, activation],
+    queryKey: ['super-lab', 'plan', body],
     queryFn: () =>
       http.post<Schemas['SuperPlan']>('/api/super-lab/plan', {
         ...body,
@@ -102,6 +114,123 @@ export function SuperAlphaLabScreen() {
               onChange={setPicked}
             />
           </Field>
+        </div>
+      </Panel>
+
+      <Panel
+        title="Custom Expressions"
+        description="Add your own selection scores and combo weights."
+      >
+        <div className="grid gap-6 lg:grid-cols-2">
+          <section className="flex min-w-0 flex-col items-start gap-3">
+            <h2 className="text-title">Custom selection</h2>
+            <Field label="Name" className="w-full">
+              <Input
+                value={selectionName}
+                maxLength={80}
+                placeholder={`Custom selection ${customSelections.length + 1}`}
+                onChange={(e) => setSelectionName(e.target.value)}
+              />
+            </Field>
+            <Field
+              label="Scoring expression"
+              hint="Scores are clamped to zero or above; the operator-count cap is added automatically."
+              className="w-full"
+            >
+              <Textarea
+                rows={3}
+                maxLength={2000}
+                value={selectionCode}
+                onChange={(e) => setSelectionCode(e.target.value)}
+                placeholder="(1 - self_correlation) * (1 - prod_correlation)"
+                className="num"
+              />
+            </Field>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={!selectionCode.trim() || customSelections.length >= MAX_CUSTOM_RECIPES}
+              onClick={() => {
+                setCustomSelections((current) => [
+                  ...current,
+                  {
+                    name: selectionName.trim() || `Custom selection ${current.length + 1}`,
+                    code: selectionCode.trim(),
+                  },
+                ])
+                setSelectionName('')
+                setSelectionCode('')
+              }}
+            >
+              Add selection
+            </Button>
+            {customSelections.length >= MAX_CUSTOM_RECIPES && (
+              <span className="text-caption text-ink-subtle">
+                Maximum {MAX_CUSTOM_RECIPES} custom selections.
+              </span>
+            )}
+            <CustomRecipes
+              label="Added selections"
+              recipes={customSelections}
+              onRemove={(index) =>
+                setCustomSelections((current) => current.filter((_, i) => i !== index))
+              }
+            />
+          </section>
+
+          <section className="flex min-w-0 flex-col items-start gap-3">
+            <h2 className="text-title">Custom combo</h2>
+            <Field label="Name" className="w-full">
+              <Input
+                value={comboName}
+                maxLength={80}
+                placeholder={`Custom combo ${customCombos.length + 1}`}
+                onChange={(e) => setComboName(e.target.value)}
+              />
+            </Field>
+            <Field label="Weight expression" className="w-full">
+              <Textarea
+                rows={3}
+                maxLength={2000}
+                value={comboCode}
+                onChange={(e) => setComboCode(e.target.value)}
+                placeholder={
+                  'stats = generate_stats(alpha);\n1 / (ts_std_dev(stats.returns, 120) + 0.0001)'
+                }
+                className="num"
+              />
+            </Field>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={!comboCode.trim() || customCombos.length >= MAX_CUSTOM_RECIPES}
+              onClick={() => {
+                setCustomCombos((current) => [
+                  ...current,
+                  {
+                    name: comboName.trim() || `Custom combo ${current.length + 1}`,
+                    code: comboCode.trim(),
+                  },
+                ])
+                setComboName('')
+                setComboCode('')
+              }}
+            >
+              Add combo
+            </Button>
+            {customCombos.length >= MAX_CUSTOM_RECIPES && (
+              <span className="text-caption text-ink-subtle">
+                Maximum {MAX_CUSTOM_RECIPES} custom combos.
+              </span>
+            )}
+            <CustomRecipes
+              label="Added combos"
+              recipes={customCombos}
+              onRemove={(index) =>
+                setCustomCombos((current) => current.filter((_, i) => i !== index))
+              }
+            />
+          </section>
         </div>
       </Panel>
 
@@ -175,6 +304,47 @@ export function SuperAlphaLabScreen() {
         )}
       </Panel>
     </Page>
+  )
+}
+
+function CustomRecipes({
+  label,
+  recipes,
+  onRemove,
+}: {
+  label: string
+  recipes: Schemas['Recipe'][]
+  onRemove: (index: number) => void
+}) {
+  if (recipes.length === 0) return null
+  return (
+    <section className="w-full border-t border-hairline pt-3">
+      <h3 className="mb-2 text-caption font-medium text-ink-subtle">{label}</h3>
+      <ul className="flex flex-col">
+        {recipes.map((recipe, index) => (
+          <li
+            key={`${recipe.code}-${index}`}
+            className="flex items-start justify-between gap-3 border-b border-hairline-subtle py-2 last:border-b-0"
+          >
+            <div className="flex min-w-0 flex-col gap-1">
+              <span className="text-body-compact font-medium text-ink">{recipe.name}</span>
+              <code className="num whitespace-pre-wrap break-all text-caption text-ink-muted">
+                {recipe.code}
+              </code>
+            </div>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label={`Remove ${recipe.name}`}
+              title={`Remove ${recipe.name}`}
+              onClick={() => onRemove(index)}
+            >
+              <XIcon />
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 

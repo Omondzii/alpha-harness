@@ -4830,6 +4830,10 @@ export interface components {
              * @default 3
              */
             cores: number;
+            /** Customcombos */
+            customCombos?: components["schemas"]["Recipe"][];
+            /** Customselections */
+            customSelections?: components["schemas"]["Recipe"][];
             /** Delay */
             delay: number;
             /** Neutralization */

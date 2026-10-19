@@ -113,17 +113,21 @@ def candidates(
     neutralization: str,
     selection_limit: int,
     activations: list[str],
+    extra_selections: list[Recipe] | None = None,
+    extra_combos: list[Recipe] | None = None,
 ) -> list[Candidate]:
     """Every selection · combo · decay · activation, as Full SUPER simulations.
 
     Full mode always: only a Full simulation can be submitted, and Quick runs none of the
     correlation checks a SuperAlpha must also pass.
     """
+    selection_recipes = [*selections(selection_limit), *(extra_selections or [])]
+    combo_recipes = [*COMBOS, *(extra_combos or [])]
     out: list[Candidate] = []
     for activation in activations:
         for decay in DECAYS:
-            for selection in selections(selection_limit):
-                for combo in COMBOS:
+            for selection in selection_recipes:
+                for combo in combo_recipes:
                     settings = SimulationSettings(
                         region=region,
                         delay=delay,

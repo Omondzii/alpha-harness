@@ -26,9 +26,9 @@ const readable = (value: string) =>
 
 /** BRAIN's five colours, as it names them. */
 const COLORS: { value: string; swatch: string }[] = [
-  { value: 'RED', swatch: 'bg-(--red-400)' },
-  { value: 'YELLOW', swatch: 'bg-(--amber-300)' },
-  { value: 'GREEN', swatch: 'bg-(--sea-400)' },
+  { value: 'RED', swatch: 'bg-(--rose-400)' },
+  { value: 'YELLOW', swatch: 'bg-(--olive-400)' },
+  { value: 'GREEN', swatch: 'bg-(--jade-400)' },
   { value: 'BLUE', swatch: 'bg-(--teal-400)' },
   { value: 'PURPLE', swatch: 'bg-(--orchid-400)' },
 ]

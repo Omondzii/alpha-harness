@@ -98,6 +98,7 @@ export function PropertiesPanel({ alpha }: { alpha: AlphaInfo }) {
       queryClient.setQueryData<AlphaView>(['alpha', alpha.alphaId, 'page'], (page) =>
         page ? { ...page, alpha: info } : page,
       )
+      queryClient.invalidateQueries({ queryKey: ['lab-tasks'] })
       setDraft(draftOf(info))
       toast.success(`Saved the properties of ${alpha.alphaId}`)
     },

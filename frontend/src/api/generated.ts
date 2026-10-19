@@ -4230,6 +4230,8 @@ export interface components {
             afterCostSharpe?: number | null;
             /** Alphaid */
             alphaId: string | null;
+            /** Color */
+            color?: string | null;
             /** Drawdown */
             drawdown: number | null;
             /**
@@ -4970,6 +4972,8 @@ export interface components {
             afterCostSharpe?: number | null;
             /** Alphaid */
             alphaId: string | null;
+            /** Color */
+            color?: string | null;
             /** Drawdown */
             drawdown: number | null;
             /**

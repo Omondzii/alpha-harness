@@ -184,6 +184,11 @@ CREATE TABLE IF NOT EXISTS alpha_pnl (
     pnl               DOUBLE,
     PRIMARY KEY (alpha_id, date)
 );
+
+CREATE TABLE IF NOT EXISTS alpha_color (
+    alpha_id VARCHAR PRIMARY KEY,
+    color VARCHAR
+);
 -- NULL on every row of an alpha means its series predates the pnl + turnover download and
 -- is re-fetched: the old daily-pnl recordset is rounded separately from the platform's stats.
 ALTER TABLE alpha_pnl ADD COLUMN IF NOT EXISTS turnover DOUBLE;
@@ -294,6 +299,8 @@ ALPHA_COLUMNS = (
     "self_correlation",
 )
 
+ALPHA_COLOR_COLUMNS = ("alpha_id", "color")
+
 #: Written only with an Alpha that has a ``train`` block (see ``AlphaVault.save_alphas``).
 TRAIN_COLUMNS = (
     "train_sharpe",
@@ -310,6 +317,7 @@ _KEYS = {
     "data_set": ("dataset_id", "instrument_type", "region", "delay", "universe"),
     "data_category": ("category_id", "instrument_type", "region", "delay", "universe"),
     "alpha": ("alpha_id",),
+    "alpha_color": ("alpha_id",),
     "alpha_pnl": ("alpha_id", "date"),
 }
 

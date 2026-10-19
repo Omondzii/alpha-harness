@@ -160,6 +160,7 @@ class RankedAlpha(Out):
     #: Its place in the sweep, as queued.
     number: int
     alpha_id: str | None
+    color: str | None = None
     expression: str | None
     settings: dict[str, Any] | None
     value: float
@@ -746,6 +747,7 @@ async def top(
             ).all()
         )
     stored = await state.alphas.by_ids([t.alpha_id for t in best if t.alpha_id])
+    colors = await state.alphas.colors_by_ids([t.alpha_id for t in best if t.alpha_id])
     current = {a: checks_of(r.get("checks")) for a, r in stored.items() if r.get("checks")}
     prod = await _prod_correlations(state, list(stored), current)
     # No download is started from here. Reading a page is not asking for one, and these are
@@ -758,6 +760,7 @@ async def top(
             | {
                 "longCount": (stored.get(r["alphaId"]) or {}).get("long_count"),
                 "shortCount": (stored.get(r["alphaId"]) or {}).get("short_count"),
+                "color": colors.get(r["alphaId"]),
                 "afterCostSharpe": (stored.get(r["alphaId"]) or {}).get("after_cost_t10"),
                 "testSharpe": (stored.get(r["alphaId"]) or {}).get("test_sharpe"),
                 "testFitness": (stored.get(r["alphaId"]) or {}).get("test_fitness"),

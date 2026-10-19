@@ -495,6 +495,7 @@ async def update_properties(alpha_id: str, body: AlphaProperties, state: State) 
     if not updated.get("id"):
         updated = await state.endpoints.alpha_body(alpha_id)
     await _store(state, f"alpha:{alpha_id}", updated)
+    await state.alphas.save_color(alpha_id, updated.get("color"))
     return _info(alpha_id, updated)
 
 

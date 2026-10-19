@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import structlog
 
-from ..db.duck import ALPHA_COLUMNS, TRAIN_COLUMNS, Catalog
+from ..db.duck import ALPHA_COLOR_COLUMNS, ALPHA_COLUMNS, TRAIN_COLUMNS, Catalog
 from . import metrics
 from .yields import SUBMITTED, without_quota_checks
 
@@ -339,12 +339,38 @@ class AlphaVault:
         from ..db.models import utcnow
 
         await self._save([alpha], utcnow())
+        await self.save_colors([alpha])
 
     async def save_alphas(self, alphas: list[Alpha]) -> int:
         """A page of alphas in one write. Ids must be distinct within the page."""
         from ..db.models import utcnow
 
-        return await self._save(alphas, utcnow())
+        written = await self._save(alphas, utcnow())
+        await self.save_colors(alphas)
+        return written
+
+    async def save_color(self, alpha_id: str, color: str | None) -> None:
+        """Keep an app property edit in the local Alpha cache until the next BRAIN sync."""
+        await self.catalog.upsert("alpha_color", ALPHA_COLOR_COLUMNS, [(alpha_id, color)])
+
+    async def save_colors(self, alphas: list[Alpha]) -> None:
+        """Refresh cached colors from one BRAIN Alpha listing page."""
+        await self.catalog.upsert(
+            "alpha_color",
+            ALPHA_COLOR_COLUMNS,
+            [(alpha.id, alpha.color) for alpha in alphas],
+        )
+
+    async def colors_by_ids(self, alpha_ids: list[str]) -> dict[str, str | None]:
+        """Return cached BRAIN colors for task-result Alpha IDs."""
+        if not alpha_ids:
+            return {}
+        placeholders = ", ".join("?" for _ in alpha_ids)
+        rows = await self.catalog.query(
+            f"SELECT alpha_id, color FROM alpha_color WHERE alpha_id IN ({placeholders})",  # noqa: S608
+            list(alpha_ids),
+        )
+        return {str(row["alpha_id"]): row["color"] for row in rows}
 
     async def _save(self, alphas: list[Alpha], fetched_at: datetime) -> int:
         """Store alphas, carrying train and test statistics only for the ones that have

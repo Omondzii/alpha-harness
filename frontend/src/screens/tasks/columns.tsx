@@ -82,6 +82,14 @@ export function QuickBadge({ alpha }: { alpha: RankedAlpha }) {
   )
 }
 
+const ALPHA_COLOR: Record<string, string> = {
+  RED: 'bg-(--rose-400) text-canvas',
+  YELLOW: 'bg-(--olive-400) text-canvas',
+  GREEN: 'bg-(--jade-400) text-canvas',
+  BLUE: 'bg-(--teal-400) text-canvas',
+  PURPLE: 'bg-(--orchid-400) text-canvas',
+}
+
 /** The Alpha's BRAIN id: what a consultant searches BRAIN by and quotes. A click on the row
  *  opens its details; Ctrl-click opens it on BRAIN. */
 export const ALPHA_ID: Column<RankedAlpha> = {
@@ -90,7 +98,12 @@ export const ALPHA_ID: Column<RankedAlpha> = {
   width: '104px',
   sortable: true,
   cell: (r) => (
-    <span className="num inline-block rounded-xs bg-pnl-positive-edge px-1 py-0.5 text-ink">
+    <span
+      className={cn(
+        'num inline-block rounded-xs px-1 py-0.5',
+        ALPHA_COLOR[r.color ?? ''] ?? 'bg-pnl-positive-edge text-ink',
+      )}
+    >
       {r.alphaId ?? DASH}
     </span>
   ),

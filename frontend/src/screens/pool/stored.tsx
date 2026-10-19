@@ -165,7 +165,13 @@ const SELECTION_ACTION = 'border-hairline-strong bg-surface-2 text-ink hover:bg-
 
 const unique = <T,>(values: (T | null)[]) => [...new Set(values.filter((v): v is T => v != null))]
 
-export function Stored({ onOpen }: { onOpen: (alphaId: string) => void }) {
+export function Stored({
+  onOpen,
+  activeAlphaId,
+}: {
+  onOpen: (alphaId: string) => void
+  activeAlphaId: string | null
+}) {
   const overview = useQuery({
     queryKey: ['pool', 'overview'],
     queryFn: pool.overview,
@@ -424,6 +430,9 @@ export function Stored({ onOpen }: { onOpen: (alphaId: string) => void }) {
           columns={COLUMNS}
           rowKey={(r) => r.alphaId}
           onRowClick={(r) => onOpen(r.alphaId)}
+          rowClass={(r) =>
+            r.alphaId === activeAlphaId ? 'ring-1 ring-inset ring-primary' : undefined
+          }
           sort={sort}
           onSort={(s) => {
             setSort(s)

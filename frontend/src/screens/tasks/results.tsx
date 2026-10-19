@@ -370,6 +370,7 @@ export function TaskResultsScreen() {
         error={top.error}
         onRefresh={() => top.refetch()}
         onOpenAlpha={setAlphaId}
+        activeAlphaId={alphaId}
       />
 
       <CheckSets rows={rows} />

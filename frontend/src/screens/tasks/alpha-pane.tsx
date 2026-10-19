@@ -129,6 +129,7 @@ export function AlphaPane({
   poolColumnAfter,
   onRefresh,
   onOpenAlpha,
+  activeAlphaId,
 }: {
   title: string
   rows: RankedAlpha[]
@@ -145,6 +146,8 @@ export function AlphaPane({
   onRefresh?: () => Promise<unknown>
   /** Show a row's Alpha in the detail sheet, as the task detail's own table does. */
   onOpenAlpha?: (alphaId: string) => void
+  /** The Alpha currently open in the detail sheet, if any. */
+  activeAlphaId?: string | null
 }) {
   const [showAll, setShowAll] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -342,6 +345,9 @@ export function AlphaPane({
         columns={columnsShown()}
         rowKey={(r) => String(r.trialId)}
         onRowClick={openRow(onOpenAlpha)}
+        rowClass={(r) =>
+          r.alphaId === activeAlphaId ? 'bg-primary-subtle hover:bg-primary-subtle' : undefined
+        }
         sort={sort}
         onSort={onSort}
         loading={(loading ?? false) || (!showAll && cleanIds.length > 0 && pool.pending)}

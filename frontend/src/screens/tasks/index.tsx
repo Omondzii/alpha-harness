@@ -453,7 +453,9 @@ export function TasksScreen() {
           />
         )}
       </Panel>
-      {view === 'tasks' && selected && <TaskDetail task={selected} onOpenAlpha={setAlphaId} />}
+      {view === 'tasks' && selected && (
+        <TaskDetail task={selected} onOpenAlpha={setAlphaId} activeAlphaId={alphaId} />
+      )}
 
       {editing && (
         <EditTask key={editing.id} task={editing} slots={slots} onClose={() => setEditing(null)} />
@@ -644,9 +646,11 @@ function TaskActionsMenu({ task, onRename }: { task: LabTask; onRename: () => vo
 function TaskDetail({
   task,
   onOpenAlpha,
+  activeAlphaId,
 }: {
   task: LabTask
   onOpenAlpha: (alphaId: string) => void
+  activeAlphaId: string | null
 }) {
   const top = useQuery({
     // Its own key, refreshed at most every 10s: the whole sweep is a megabyte or more on a
@@ -669,7 +673,8 @@ function TaskDetail({
       : awaitingFull(r)
         ? ''
         : 'bg-pnl-negative-tint'
-  const rowClass = verdict
+  const rowClass = (row: RankedAlpha) =>
+    cn(verdict(row), row.alphaId === activeAlphaId && 'ring-1 ring-inset ring-primary')
 
   const done = task.status === 'COMPLETE' || task.status === 'FAILED'
   // Three outcomes and nothing else. Submittable: nothing has refused it, pending checks

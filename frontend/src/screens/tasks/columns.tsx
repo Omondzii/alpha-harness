@@ -89,7 +89,11 @@ export const ALPHA_ID: Column<RankedAlpha> = {
   header: 'Alpha',
   width: '104px',
   sortable: true,
-  cell: (r) => <span className="num text-ink">{r.alphaId ?? DASH}</span>,
+  cell: (r) => (
+    <span className="num inline-block rounded-xs bg-pnl-positive-edge px-1 py-0.5 text-ink">
+      {r.alphaId ?? DASH}
+    </span>
+  ),
 }
 
 /** BRAIN wants it below 0.7, or a Sharpe 10% above each production Alpha it exceeds. */

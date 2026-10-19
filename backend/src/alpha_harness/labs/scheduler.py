@@ -579,10 +579,20 @@ async def resize_task(
             # The Settings Sampler keeps its spare batch (see api/tools.py).
             spare = 1 if stored.sampler == SETTINGS_SAMPLER else 0
             stored.batch_size = (cores + spare) * 10
-            if simulations is not None:
-                stored.max_trials = simulations
             params = task_params(stored)
             params.cores = cores
+            if (
+                stored.status == StudyStatus.COMPLETE
+                and stored.sampler == TEMPLATE_SAMPLER
+                and simulations is not None
+                and simulations > stored.max_trials
+            ):
+                stored.status = StudyStatus.IDLE
+                stored.message = None
+                stored.finished_at = None
+                params.stopping = False
+            if simulations is not None:
+                stored.max_trials = simulations
             stored.sampler_params = params.dump()
             await session.commit()
         await optimizer.engine.set_quota(row.task, cores)

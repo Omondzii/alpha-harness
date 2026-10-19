@@ -667,9 +667,15 @@ async def stop(task_id: int, state: State) -> LabTask:
 
 @router.patch("/{task_id}")
 async def change(task_id: int, body: TaskChange, state: State) -> LabTask:
-    """Change a task's cores or simulations. A running task takes them from its next round."""
+    """Change a task's cores or simulations. Completed Template tasks can be extended."""
     row = await _one(state, task_id)
-    if row.status in FINISHED:
+    extending_template = (
+        row.status == StudyStatus.COMPLETE
+        and row.sampler == TEMPLATE_SAMPLER
+        and body.simulations is not None
+        and body.simulations > row.max_trials
+    )
+    if row.status in FINISHED and not extending_template:
         raise refuse(409, "finished", "A finished task can't change.")
     if body.cores and body.cores > state.engine.slots:
         raise refuse(

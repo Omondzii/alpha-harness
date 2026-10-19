@@ -61,6 +61,8 @@ import { type Column, DataTable } from '@/ui/table'
 
 /** Matches `labs.params.SETTINGS_SAMPLER`. */
 const SETTINGS_SAMPLER = 'settings-sampler'
+/** Matches `labs.params.TEMPLATE_SAMPLER`. */
+const TEMPLATE_SAMPLER = 'template'
 
 const TOP_COLUMNS: Column<RankedAlpha>[] = [
   {
@@ -458,7 +460,13 @@ export function TasksScreen() {
       )}
 
       {editing && (
-        <EditTask key={editing.id} task={editing} slots={slots} onClose={() => setEditing(null)} />
+        <EditTask
+          key={editing.id}
+          task={editing}
+          slots={slots}
+          extension={editing.status === 'COMPLETE' && editing.lab === TEMPLATE_SAMPLER}
+          onClose={() => setEditing(null)}
+        />
       )}
       {renaming && (
         <RenameTask key={renaming.id} task={renaming} onClose={() => setRenaming(null)} />
@@ -499,6 +507,16 @@ function confirmCopy(a: Act, fresh: number): { title: string; label: string; bod
           title: 'Retry this task?',
           label: 'Retry',
           body: 'Simulations it sent before it failed are scored on the way.',
+        }
+      if (
+        a.task.lab === TEMPLATE_SAMPLER &&
+        a.task.simulated > 0 &&
+        a.task.target > a.task.simulated
+      )
+        return {
+          title: 'Continue this search?',
+          label: 'Run Next Batch',
+          body: `This continues from the saved trials and requests up to ${fmt.int(a.task.target - a.task.simulated)} more simulations. Combinations already simulated are skipped.`,
         }
       return { title: 'Run this task?', label: 'Run Task' }
     case 'stop':
@@ -599,11 +617,18 @@ function Actions({
           <SquareIcon />
         </Button>
       )}
-      {!finished && !stopping && (
-        <Button size="icon-sm" variant="ghost" aria-label="Edit" title="Edit" onClick={onEdit}>
+      {(!finished && !stopping) ||
+      (finished && status === 'COMPLETE' && task.lab === TEMPLATE_SAMPLER) ? (
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label={finished ? 'Extend Search' : 'Edit'}
+          title={finished ? 'Extend Search' : 'Edit'}
+          onClick={onEdit}
+        >
           <PencilIcon />
         </Button>
-      )}
+      ) : null}
       {status !== 'RUNNING' && (
         <Button
           size="icon-sm"
@@ -926,14 +951,24 @@ function RenameTask({ task, onClose }: { task: LabTask; onClose: () => void }) {
   )
 }
 
-function EditTask({ task, slots, onClose }: { task: LabTask; slots: number; onClose: () => void }) {
+function EditTask({
+  task,
+  slots,
+  extension,
+  onClose,
+}: {
+  task: LabTask
+  slots: number
+  extension: boolean
+  onClose: () => void
+}) {
   const queryClient = useQueryClient()
   const [cores, setCores] = useState(task.cores)
   const [simulations, setSimulations] = useState(String(task.target))
   const count = Number(simulations)
   // Below what it has already simulated the task is finished the moment it is saved, and the
   // count reads past its own target. Stop is the way to end a task early.
-  const least = Math.max(1, task.simulated)
+  const least = Math.max(1, extension ? task.target + 1 : task.simulated)
   const valid = Number.isInteger(count) && count >= least && count <= MAX_SIMULATIONS
   const change = useMutation({
     meta: { inline: true },
@@ -948,7 +983,7 @@ function EditTask({ task, slots, onClose }: { task: LabTask; slots: number; onCl
     <Dialog
       open
       onOpenChange={(isOpen) => !isOpen && onClose()}
-      title="Edit Task"
+      title={extension ? 'Extend Template Search' : 'Edit Task'}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -977,12 +1012,24 @@ function EditTask({ task, slots, onClose }: { task: LabTask; slots: number; onCl
         <Field
           label="Simulations"
           hint={
-            task.simulated > 0 && (
+            extension ? (
+              <>
+                Current total: <span className="num">{fmt.int(task.target)}</span>. Set the total
+                target higher to request more; earlier trials are kept and already-simulated
+                combinations are skipped.
+                {Number.isInteger(count) && count > task.target && (
+                  <>
+                    {' '}
+                    This requests <span className="num">{fmt.int(count - task.target)}</span> more.
+                  </>
+                )}
+              </>
+            ) : task.simulated > 0 ? (
               <>
                 <span className="num">{fmt.int(task.simulated)}</span> simulated so far: the least
                 it can be set to
               </>
-            )
+            ) : null
           }
         >
           <Input

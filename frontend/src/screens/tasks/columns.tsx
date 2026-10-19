@@ -101,7 +101,7 @@ export const ALPHA_ID: Column<RankedAlpha> = {
     <span
       className={cn(
         'num inline-block rounded-xs px-1 py-0.5',
-        ALPHA_COLOR[r.color ?? ''] ?? 'bg-pnl-positive-edge text-ink',
+        ALPHA_COLOR[r.color ?? ''] ?? 'bg-pnl-positive-tint text-ink',
       )}
     >
       {r.alphaId ?? DASH}

@@ -284,6 +284,7 @@ export function Checkbox({
   label,
   checked,
   onChange,
+  onClick,
   disabled,
   className,
   ...props
@@ -291,6 +292,7 @@ export function Checkbox({
   label: ReactNode
   checked: boolean
   onChange: (checked: boolean) => void
+  onClick?: React.MouseEventHandler<HTMLSpanElement> | undefined
   disabled?: boolean | undefined
   className?: string | undefined
   'aria-label'?: string | undefined
@@ -302,6 +304,7 @@ export function Checkbox({
         id={id}
         checked={checked}
         disabled={disabled}
+        onClick={onClick}
         onCheckedChange={onChange}
         className={cn(
           'mt-px flex size-4 shrink-0 items-center justify-center rounded-xs border transition-colors',

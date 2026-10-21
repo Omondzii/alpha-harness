@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
+  BrainIcon,
   CopyIcon,
   EllipsisIcon,
   ExternalLinkIcon,
@@ -15,6 +16,8 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import { errorMessage } from '@/api/http'
 import { cn } from '@/lib/cn'
 import { DASH, fmt } from '@/lib/format'
@@ -56,13 +59,31 @@ import {
   signTone,
   TEXT_TONE,
 } from '@/ui/kit'
-import { Confirm, Dialog, Menu } from '@/ui/overlay'
+import { Confirm, Dialog, Menu, Tooltip } from '@/ui/overlay'
 import { type Column, DataTable } from '@/ui/table'
 
 /** Matches `labs.params.SETTINGS_SAMPLER`. */
 const SETTINGS_SAMPLER = 'settings-sampler'
 /** Matches `labs.params.TEMPLATE_SAMPLER`. */
 const TEMPLATE_SAMPLER = 'template'
+
+const useStashedTasks = create<{
+  ids: number[]
+  setStashed: (id: number, stashed: boolean) => void
+}>()(
+  persist(
+    (set) => ({
+      ids: [],
+      setStashed: (id, stashed) =>
+        set((state) => ({
+          ids: stashed
+            ? [...new Set([...state.ids, id])]
+            : state.ids.filter((taskId) => taskId !== id),
+        })),
+    }),
+    { name: 'alpha-harness-favorite-tasks' },
+  ),
+)
 
 const TOP_COLUMNS: Column<RankedAlpha>[] = [
   ALPHA_ID,
@@ -219,7 +240,9 @@ export function TasksScreen() {
   const [renaming, setRenaming] = useState<LabTask | null>(null)
   const [confirming, setConfirming] = useState<Act | null>(null)
   const [alphaId, setAlphaId] = useState<string | null>(null)
-  const [view, setView] = useState<'tasks' | 'submittable'>('tasks')
+  const [view, setView] = useState<'tasks' | 'stashed' | 'submittable'>('tasks')
+  const stashedIds = useStashedTasks((state) => state.ids)
+  const setStashed = useStashedTasks((state) => state.setStashed)
 
   // Nothing picked yet: open on what is running, then stay there. Re-deriving this every render
   // would move the pane out from under the reader the moment that task finished.
@@ -259,60 +282,104 @@ export function TasksScreen() {
   const assignedCores = total(open, (t) => t.cores)
   const waiting = all.filter((t) => t.status === 'QUEUED').length
   const fresh = all.filter((t) => t.status === 'IDLE').length
-  const selected = all.find((t) => t.id === selectedId) ?? null
+  const visibleTasks = view === 'stashed' ? all.filter((t) => stashedIds.includes(t.id)) : all
+  const selected = visibleTasks.find((t) => t.id === selectedId) ?? null
   const copy = confirming ? confirmCopy(confirming, fresh) : null
 
   const columns: Column<LabTask>[] = [
     {
       key: 'task',
       header: 'Task',
-      width: 'minmax(220px,2fr)',
-      cell: (t) => (
-        <span className="block min-w-0 truncate" title={t.datasetIds.join(', ')}>
-          <span className="text-ink">
-            {t.name ?? (
-              <>
-                {t.labName}
-                {t.templateName ? ` · ${t.templateName}` : ''}
-              </>
-            )}
-          </span>
-          <span className="text-ink-subtle">
-            {t.name && ` · ${t.labName}${t.templateName ? ` · ${t.templateName}` : ''}`}
-            {/* A sweep spans many markets, so naming the source Alpha's one would mislead. */}
-            {t.lab === SETTINGS_SAMPLER ? (
-              <>
-                {/* A sweep started from a typed expression has no source Alpha: "" not null. */}
-                {t.alphaId && (
+      width: 'minmax(250px,2fr)',
+      cell: (t) => {
+        const stashed = stashedIds.includes(t.id)
+        return (
+          <span className="flex min-w-0 items-center gap-2">
+            <Tooltip
+              content={
+                <span className="flex items-center gap-1.5">
+                  <BrainIcon size={14} strokeWidth={1.35} aria-hidden />
+                  {stashed
+                    ? 'Task stashed · Click to remove'
+                    : 'Stash task'}
+                </span>
+              }
+            >
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                className="cursor-pointer"
+                aria-label={
+                  stashed
+                    ? `Remove ${t.name ?? t.labName} from stash`
+                    : `Stash ${t.name ?? t.labName}`
+                }
+                aria-pressed={stashed}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setStashed(t.id, !stashed)
+                }}
+              >
+                <BrainIcon
+                  strokeWidth={1.35}
+                  className={cn(
+                    'size-4',
+                    stashed ? 'fill-primary-subtle text-primary' : 'text-ink-muted',
+                  )}
+                />
+              </Button>
+            </Tooltip>
+            <span className="block min-w-0 truncate" title={t.datasetIds.join(', ')}>
+              <span className="text-ink">
+                {t.name ?? (
                   <>
-                    {' · '}
-                    <span className="num">{t.alphaId}</span>
+                    {t.labName}
+                    {t.templateName ? ` · ${t.templateName}` : ''}
                   </>
                 )}
-                {' · '}
-                <span className="num">{fmt.int(t.markets)}</span>
-                {t.markets === 1 ? ' Market' : ' Markets'}
-              </>
-            ) : (
-              <>
-                {' · '}
-                <span className="num">{`${t.region} D${t.delay}`}</span>
-                {/* Neither seeds nor datasets: say nothing rather than report "0 datasets"
-                    about something the task never had. */}
-                {(t.seeds > 0 || t.datasetIds.length > 0) && (
+              </span>
+              <span className="text-ink-subtle">
+                {t.name && ` · ${t.labName}${t.templateName ? ` · ${t.templateName}` : ''}`}
+                {/* A sweep spans many markets, so naming the source Alpha's one would mislead. */}
+                {t.lab === SETTINGS_SAMPLER ? (
+                  <>
+                    {/* A sweep started from a typed expression has no source Alpha: "" not null. */}
+                    {t.alphaId && (
+                      <>
+                        {' · '}
+                        <span className="num">{t.alphaId}</span>
+                      </>
+                    )}
+                    {' · '}
+                    <span className="num">{fmt.int(t.markets)}</span>
+                    {t.markets === 1 ? ' Market' : ' Markets'}
+                  </>
+                ) : (
                   <>
                     {' · '}
-                    <span className="num">
-                      {fmt.int(t.seeds > 0 ? t.seeds : t.datasetIds.length)}
-                    </span>
-                    {t.seeds > 0 ? ' seeds' : t.datasetIds.length === 1 ? ' dataset' : ' datasets'}
+                    <span className="num">{`${t.region} D${t.delay}`}</span>
+                    {/* Neither seeds nor datasets: say nothing rather than report "0 datasets"
+                        about something the task never had. */}
+                    {(t.seeds > 0 || t.datasetIds.length > 0) && (
+                      <>
+                        {' · '}
+                        <span className="num">
+                          {fmt.int(t.seeds > 0 ? t.seeds : t.datasetIds.length)}
+                        </span>
+                        {t.seeds > 0
+                          ? ' seeds'
+                          : t.datasetIds.length === 1
+                            ? ' dataset'
+                            : ' datasets'}
+                      </>
+                    )}
                   </>
                 )}
-              </>
-            )}
+              </span>
+            </span>
           </span>
-        </span>
-      ),
+        )
+      },
     },
     {
       key: 'runDate',
@@ -430,6 +497,20 @@ export function TasksScreen() {
             label="View"
             items={[
               { value: 'tasks', label: 'Tasks' },
+              {
+                value: 'stashed',
+                label: (
+                  <Tooltip content="Stashed tasks.">
+                    <span className="inline-flex cursor-pointer items-center gap-1.5">
+                      <BrainIcon size={14} strokeWidth={1.35} aria-hidden />
+                      <span>Stashed</span>
+                      <Badge tone="profit" className="px-1 py-0 text-[10px]">
+                        {stashedIds.length}
+                      </Badge>
+                    </span>
+                  </Tooltip>
+                ),
+              },
               { value: 'submittable', label: 'Submittable Alphas' },
             ]}
             value={view}
@@ -445,10 +526,14 @@ export function TasksScreen() {
               Open Research Labs
             </Link>
           </Empty>
+        ) : view === 'stashed' && visibleTasks.length === 0 ? (
+          <Empty title="Nothing stashed yet">
+            Use the brain icon beside a task to stash it here.
+          </Empty>
         ) : (
           <DataTable
-            label="Tasks"
-            rows={all}
+            label={view === 'stashed' ? 'Stashed tasks' : 'Tasks'}
+            rows={visibleTasks}
             columns={columns}
             rowKey={(t) => String(t.id)}
             onRowClick={(t) => setSelectedId(t.id)}
@@ -462,7 +547,7 @@ export function TasksScreen() {
           />
         )}
       </Panel>
-      {view === 'tasks' && selected && (
+      {view !== 'submittable' && selected && (
         <TaskDetail task={selected} onOpenAlpha={setAlphaId} activeAlphaId={alphaId} />
       )}
 

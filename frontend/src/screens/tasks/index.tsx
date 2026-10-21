@@ -314,6 +314,12 @@ export function TasksScreen() {
       ),
     },
     {
+      key: 'runDate',
+      header: 'Run Date',
+      width: '136px',
+      cell: (t) => <span className="num">{fmt.dateTime(t.startedAt)}</span>,
+    },
+    {
       key: 'status',
       header: 'Status',
       // Wide enough for the longest badge ("Not Started" measures 96px) plus the cell's px-3.
@@ -323,7 +329,7 @@ export function TasksScreen() {
     {
       key: 'cores',
       header: 'Cores',
-      width: '64px',
+      width: '56px',
       align: 'right',
       cell: (t) => fmt.int(t.cores),
     },

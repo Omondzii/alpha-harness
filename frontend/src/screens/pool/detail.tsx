@@ -1,11 +1,13 @@
 /** One stored alpha: PnL, settings, submission checks, and correlations on request. */
 
-import { useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { CopyIcon, MaximizeIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { catalog } from '@/api/catalog'
 import { ApiError, errorMessage } from '@/api/http'
+import type { Scope } from '@/api/types'
 import { fmt, isNum } from '@/lib/format'
 import { alpha, notApplicable } from '@/screens/alpha/api'
 import { PropertiesPanel } from '@/screens/alpha/properties'
@@ -47,12 +49,7 @@ export function DetailSheet({ alphaId, onClose }: { alphaId: string | null; onCl
         <div className="flex items-center gap-2">
           <span className="num">{alphaId ?? 'Alpha'}</span>
           {alphaId && (
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              onClick={copyId}
-              aria-label={`Copy ${alphaId}`}
-            >
+            <Button size="icon-sm" variant="ghost" onClick={copyId} aria-label={`Copy ${alphaId}`}>
               <CopyIcon className="size-3.5" />
             </Button>
           )}
@@ -188,6 +185,11 @@ function Body({ alphaId }: { alphaId: string }) {
   return (
     <div className="flex flex-col gap-4">
       <AstInspector expression={d.expression} />
+      <AlphaDataFields
+        fields={alphaInfo?.dataFields}
+        settings={d.settings}
+        loading={page.isPending}
+      />
       <div className="flex flex-wrap gap-2">
         <Button
           size="sm"
@@ -263,6 +265,107 @@ function Body({ alphaId }: { alphaId: string }) {
         <Skeleton className="h-80" label="Loading properties" />
       ) : (
         alphaInfo && <PropertiesPanel alpha={alphaInfo} />
+      )}
+    </div>
+  )
+}
+
+function AlphaDataFields({
+  fields,
+  settings,
+  loading,
+}: {
+  fields: string[] | null | undefined
+  settings: AlphaSettings
+  loading: boolean
+}) {
+  const scope: Scope | null =
+    settings.region && settings.delay != null && settings.universe
+      ? {
+          instrumentType: 'EQUITY',
+          region: settings.region,
+          delay: settings.delay,
+          universe: settings.universe,
+        }
+      : null
+  const ids = [...new Set(fields ?? [])]
+  const lookups = useQueries({
+    queries: ids.map((fieldId) => ({
+      queryKey: ['catalog', 'field', scope, fieldId],
+      queryFn: () => {
+        if (!scope) throw new Error('Alpha market settings are unavailable')
+        return catalog.field(scope, fieldId)
+      },
+      enabled: scope !== null,
+      retry: false,
+    })),
+  })
+  const lookupError = lookups.find(
+    (query) => query.isError && !(query.error instanceof ApiError && query.error.status === 404),
+  )
+
+  return (
+    <div className="flex flex-col gap-1.5 rounded-sm border border-hairline bg-surface-1 p-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="text-body-compact font-medium text-ink">Data fields</h3>
+        {!loading && fields != null && (
+          <span className="num text-body-compact text-ink-subtle">
+            {fmt.int(ids.length)} {ids.length === 1 ? 'field' : 'fields'}
+          </span>
+        )}
+      </div>
+      {loading ? (
+        <p className="text-body-compact text-ink-subtle">Loading data fields…</p>
+      ) : fields == null ? (
+        <p className="text-body-compact text-ink-subtle">
+          Data fields could not be determined from this expression.
+        </p>
+      ) : ids.length === 0 ? (
+        <p className="text-body-compact text-ink-subtle">No data fields used.</p>
+      ) : (
+        <>
+          {lookupError && (
+            <ErrorNotice error={lookupError.error} title="Could not load field details" />
+          )}
+          <ul className="flex flex-col divide-y divide-hairline-subtle">
+            {ids.map((fieldId, i) => {
+              const lookup = lookups[i]
+              const field = lookup?.data
+              const notFound = lookup?.error instanceof ApiError && lookup.error.status === 404
+              return (
+                <li
+                  key={fieldId}
+                  className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-1 text-body-compact"
+                >
+                  {field ? (
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <code className="num break-all text-ink">{field.field_id}</code>
+                      <span className="text-ink-subtle">
+                        {[field.field_type, field.dataset_id, field.category_name]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                      {field.description && <p className="text-ink-subtle">{field.description}</p>}
+                    </div>
+                  ) : (
+                    <>
+                      <code className="num min-w-0 break-all text-ink">{fieldId}</code>
+                      <span className="text-ink-subtle">
+                        {notFound
+                          ? 'Not in this market’s catalog'
+                          : lookup?.isError
+                            ? 'Could not load metadata'
+                            : scope
+                              ? 'Loading metadata…'
+                              : 'Market settings unavailable'}
+                      </span>
+                    </>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </>
       )}
     </div>
   )

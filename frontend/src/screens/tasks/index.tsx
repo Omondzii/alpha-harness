@@ -1,9 +1,9 @@
 /** Tasks: everything the labs added. Only here does a task run, wait for cores, pause or stop. */
 
+import { faTent, faTentArrowDownToLine, faTents } from '@fortawesome/free-solid-svg-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
-  BrainIcon,
   CopyIcon,
   EllipsisIcon,
   ExternalLinkIcon,
@@ -66,6 +66,24 @@ import { type Column, DataTable } from '@/ui/table'
 const SETTINGS_SAMPLER = 'settings-sampler'
 /** Matches `labs.params.TEMPLATE_SAMPLER`. */
 const TEMPLATE_SAMPLER = 'template'
+
+function StashIcon({ icon, className }: { icon: typeof faTent; className?: string }) {
+  const [width, height, , , iconPath] = icon.icon
+  const paths = Array.isArray(iconPath) ? iconPath : [iconPath]
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      viewBox={`0 0 ${width} ${height}`}
+      fill="currentColor"
+      focusable="false"
+    >
+      {paths.map((path, index) => (
+        <path key={index} d={path} />
+      ))}
+    </svg>
+  )
+}
 
 const useStashedTasks = create<{
   ids: number[]
@@ -298,10 +316,8 @@ export function TasksScreen() {
             <Tooltip
               content={
                 <span className="flex items-center gap-1.5">
-                  <BrainIcon size={14} strokeWidth={1.35} aria-hidden />
-                  {stashed
-                    ? 'Task stashed · Click to remove'
-                    : 'Stash task'}
+                  <StashIcon icon={stashed ? faTent : faTentArrowDownToLine} className="size-3.5" />
+                  {stashed ? 'Task stashed · Click to remove' : 'Stash task'}
                 </span>
               }
             >
@@ -320,12 +336,9 @@ export function TasksScreen() {
                   setStashed(t.id, !stashed)
                 }}
               >
-                <BrainIcon
-                  strokeWidth={1.35}
-                  className={cn(
-                    'size-4',
-                    stashed ? 'fill-primary-subtle text-primary' : 'text-ink-muted',
-                  )}
+                <StashIcon
+                  icon={stashed ? faTent : faTentArrowDownToLine}
+                  className={cn('size-4', stashed ? 'text-primary' : 'text-ink-muted')}
                 />
               </Button>
             </Tooltip>
@@ -502,7 +515,7 @@ export function TasksScreen() {
                 label: (
                   <Tooltip content="Stashed tasks.">
                     <span className="inline-flex cursor-pointer items-center gap-1.5">
-                      <BrainIcon size={14} strokeWidth={1.35} aria-hidden />
+                      <StashIcon icon={faTents} className="size-3.5" />
                       <span>Stashed</span>
                       <Badge tone="profit" className="px-1 py-0 text-[10px]">
                         {stashedIds.length}

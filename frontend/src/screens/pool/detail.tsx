@@ -21,6 +21,7 @@ import {
   ErrorNotice,
   KV,
   Metric,
+  MetricBadge,
   Notice,
   Skeleton,
 } from '@/ui/kit'
@@ -306,12 +307,12 @@ function AlphaDataFields({
 
   return (
     <div className="flex flex-col gap-1.5 rounded-sm border border-hairline bg-surface-1 p-2">
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-body-compact font-medium text-ink">Data fields</h3>
+      <div className="flex flex-col gap-0.5">
+        <h3 className="text-title">Data fields</h3>
         {!loading && fields != null && (
-          <span className="num text-body-compact text-ink-subtle">
+          <p className="text-body-compact text-ink-subtle">
             {fmt.int(ids.length)} {ids.length === 1 ? 'field' : 'fields'}
-          </span>
+          </p>
         )}
       </div>
       {loading ? (
@@ -340,12 +341,16 @@ function AlphaDataFields({
                   {field ? (
                     <div className="flex min-w-0 flex-col gap-0.5">
                       <code className="num break-all text-ink">{field.field_id}</code>
-                      <span className="text-ink-subtle">
-                        {[field.field_type, field.dataset_id, field.category_name]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </span>
-                      {field.description && <p className="text-ink-subtle">{field.description}</p>}
+                      <div className="flex flex-wrap items-center gap-1.5 text-body-compact">
+                        {[field.field_type, field.dataset_id].filter(Boolean).length > 0 && (
+                          <span className="text-ink-subtle">
+                            {[field.field_type, field.dataset_id].filter(Boolean).join(' · ')}
+                          </span>
+                        )}
+                        <MetricBadge tone="profit">
+                          {field.category_name ?? 'Uncategorised'}
+                        </MetricBadge>
+                      </div>
                     </div>
                   ) : (
                     <>

@@ -65,6 +65,7 @@ const SETTINGS_SAMPLER = 'settings-sampler'
 const TEMPLATE_SAMPLER = 'template'
 
 const TOP_COLUMNS: Column<RankedAlpha>[] = [
+  ALPHA_ID,
   {
     key: 'expression',
     header: 'Expression',
@@ -186,16 +187,16 @@ const SAMPLER_COLUMNS: Column<RankedAlpha>[] = [
   AFTER_COST_SHARPE,
 ]
 
-/** What a task searches for leads the table when it is not Sharpe, which the table shows anyway. */
+/** What a task searches for leads the table when it is not already shown by another column. */
 const topColumns = (task: LabTask): Column<RankedAlpha>[] =>
   task.lab === SETTINGS_SAMPLER
     ? task.truncationAgent
       ? [...SAMPLER_COLUMNS.slice(0, 5), TRUNCATION, ...SAMPLER_COLUMNS.slice(5)]
       : SAMPLER_COLUMNS
-    : task.objectiveLabel === 'Sharpe'
+    : task.objectiveLabel === 'Sharpe' || task.objectiveLabel === 'Train Fitness'
       ? TOP_COLUMNS
       : [
-          ...TOP_COLUMNS.slice(0, 1),
+          ...TOP_COLUMNS.slice(0, 2),
           {
             key: 'value',
             header: task.objectiveLabel,
@@ -203,7 +204,7 @@ const topColumns = (task: LabTask): Column<RankedAlpha>[] =>
             align: 'right',
             cell: (r) => <span className={TEXT_TONE[signTone(r.value)]}>{fmt.ratio(r.value)}</span>,
           },
-          ...TOP_COLUMNS.slice(1),
+          ...TOP_COLUMNS.slice(2),
         ]
 
 type Act = { action: 'runAll' } | { action: 'run' | 'pause' | 'stop' | 'remove'; task: LabTask }

@@ -1,6 +1,6 @@
 /** Tasks: everything the labs added. Only here does a task run, wait for cores, pause or stop. */
 
-import { faTent, faTentArrowDownToLine, faTents } from '@fortawesome/free-solid-svg-icons'
+import { faTent, faTents } from '@fortawesome/free-solid-svg-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
@@ -316,7 +316,7 @@ export function TasksScreen() {
             <Tooltip
               content={
                 <span className="flex items-center gap-1.5">
-                  <StashIcon icon={stashed ? faTent : faTentArrowDownToLine} className="size-3.5" />
+                  <StashIcon icon={faTent} className="size-3.5" />
                   {stashed ? 'Task stashed · Click to remove' : 'Stash task'}
                 </span>
               }
@@ -337,7 +337,7 @@ export function TasksScreen() {
                 }}
               >
                 <StashIcon
-                  icon={stashed ? faTent : faTentArrowDownToLine}
+                  icon={faTent}
                   className={cn('size-4', stashed ? 'text-primary' : 'text-ink-muted')}
                 />
               </Button>

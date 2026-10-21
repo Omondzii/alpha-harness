@@ -444,7 +444,7 @@ export function Segmented<V extends string | number>({
         <Radio.Root
           key={String(item.value)}
           value={String(item.value)}
-          className="inline-flex h-7 items-center justify-center rounded-xs border border-transparent px-3 text-body-compact leading-none font-medium text-ink-subtle transition-colors hover:text-ink data-[checked]:border-hairline-strong data-[checked]:bg-surface-3 data-[checked]:text-ink"
+          className="inline-flex h-7 cursor-pointer items-center justify-center rounded-xs border border-transparent px-3 text-body-compact leading-none font-medium text-ink-subtle transition-colors hover:text-ink data-[checked]:border-hairline-strong data-[checked]:bg-surface-3 data-[checked]:text-ink"
         >
           {item.label}
         </Radio.Root>

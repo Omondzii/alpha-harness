@@ -174,6 +174,7 @@ export function TaskResultsScreen() {
   const id = Number(taskId)
   const [sort, setSort] = useState<Sort>({ key: 'warningCount', desc: false })
   const [alphaId, setAlphaId] = useState<string | null>(null)
+  const [regionFilter, setRegionFilter] = useState<string | null>(null)
 
   const tasks = useQuery({ queryKey: ['lab-tasks'], queryFn: labTasks.list })
   const task = tasks.data?.tasks.find((t) => t.id === id)
@@ -313,7 +314,18 @@ export function TaskResultsScreen() {
                 key: 'region',
                 header: 'Region',
                 width: 'minmax(80px,1fr)',
-                cell: (r) => <span className="num text-ink">{r.region}</span>,
+                cell: (r) => (
+                  <button
+                    type="button"
+                    onClick={() => setRegionFilter(regionFilter === r.region ? null : r.region)}
+                    className={cn(
+                      'num cursor-pointer text-left transition-colors hover:text-ink-muted',
+                      regionFilter === r.region ? 'font-semibold text-primary' : 'text-ink',
+                    )}
+                  >
+                    {r.region}
+                  </button>
+                ),
               },
               {
                 key: 'alphas',
@@ -373,6 +385,7 @@ export function TaskResultsScreen() {
         onRefresh={() => top.refetch()}
         onOpenAlpha={setAlphaId}
         activeAlphaId={alphaId}
+        regionFilter={regionFilter}
       />
 
       <CheckSets rows={rows} />

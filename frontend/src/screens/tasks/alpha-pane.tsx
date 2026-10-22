@@ -20,6 +20,7 @@ import { DASH, fmt } from '@/lib/format'
 import { useLive } from '@/lib/live'
 import { BRAIN_ALPHA_URL } from '@/screens/pool/api'
 import { labTasks, type RankedAlpha } from '@/screens/tasks/api'
+import { setting } from '@/screens/tasks/columns'
 import { type PowerPoolRow, powerPoolTone, usePowerPool } from '@/screens/tasks/power-pool'
 import { Button, ErrorNotice, LINK, Notice, Panel, Progress } from '@/ui/kit'
 import { type Column, DataTable, type Sort } from '@/ui/table'
@@ -143,6 +144,7 @@ export function AlphaPane({
   onRefresh,
   onOpenAlpha,
   activeAlphaId,
+  regionFilter,
 }: {
   title: string
   rows: RankedAlpha[]
@@ -161,6 +163,8 @@ export function AlphaPane({
   onOpenAlpha?: (alphaId: string) => void
   /** The Alpha currently open in the detail sheet, if any. */
   activeAlphaId?: string | null
+  /** Filter rows by region. If null, show all regions. */
+  regionFilter?: string | null
 }) {
   const [showAll, setShowAll] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -191,10 +195,22 @@ export function AlphaPane({
     () => clean.filter((r) => passesPool(pool.by.get(r.alphaId))),
     [clean, pool.by],
   )
-  const shown = showAll ? rows : survivors
+  const filtered = useMemo(() => {
+    if (!regionFilter) return rows
+    return rows.filter((r) => setting(r, 'region') === regionFilter)
+  }, [rows, regionFilter])
+  const filteredUnsubmitted = useMemo(() => filtered.filter(isUnsubmitted), [filtered])
+  const filteredClean = useMemo(() => filteredUnsubmitted.filter(isClean), [filteredUnsubmitted])
+  const filteredCleanIds = useMemo(() => filteredClean.map((r) => r.alphaId), [filteredClean])
+  const filteredPool = usePowerPool(filteredCleanIds)
+  const filteredSurvivors = useMemo(
+    () => filteredClean.filter((r) => passesPool(filteredPool.by.get(r.alphaId))),
+    [filteredClean, filteredPool.by],
+  )
+  const shown = showAll ? filtered : filteredSurvivors
   const sorted = useMemo(
-    () => [...shown].sort((a, b) => comparePool(a, b, sort, pool.by, compare)),
-    [shown, sort, pool.by, compare],
+    () => [...shown].sort((a, b) => comparePool(a, b, sort, regionFilter ? filteredPool.by : pool.by, compare)),
+    [shown, sort, pool.by, filteredPool.by, compare, regionFilter],
   )
 
   const refresh = () => Promise.all([onRefresh?.(), cleanIds.length ? pool.refresh() : null])

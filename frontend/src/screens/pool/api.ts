@@ -32,6 +32,8 @@ export interface AlphaPageRequest {
   search?: string | null
   /** Only Alphas the Evolution Lab can breed from, for when this table picks seeds. */
   evolvable?: boolean
+  /** Filter by pyramid categories (e.g. "Model" to match "ASI/D1/Model"). */
+  pyramids?: string[] | null
   /** 1..500 */
   limit?: number
   offset?: number

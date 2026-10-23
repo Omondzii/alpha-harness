@@ -594,6 +594,7 @@ class AlphaVault:
         maximum: dict[str, float] | None = None,
         search: str | None = None,
         evolvable: bool = False,
+        pyramids: list[str] | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> dict[str, Any]:
@@ -634,6 +635,14 @@ class AlphaVault:
                 "OR lower(coalesce(a.name, '')) LIKE ?)"
             )
             params.extend([needle, needle, needle])
+        if pyramids:
+            # Filter by pyramid categories: match pyramids ending with any of the given categories
+            # e.g. "Model" matches "ASI/D1/Model", "USA/D0/Model", etc.
+            pyramid_conditions = []
+            for p in pyramids:
+                pyramid_conditions.append("EXISTS (SELECT 1 FROM json_each(a.pyramids) WHERE value LIKE ?)")
+                params.append(f"%/{p}")
+            clauses.append(f"({' OR '.join(pyramid_conditions)})")
 
         where = " AND ".join(clauses)
         order = ALPHA_METRICS.get(sort_by, ALPHA_METRICS["date_created"])

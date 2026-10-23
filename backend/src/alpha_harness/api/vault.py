@@ -226,6 +226,8 @@ class AlphaPageRequest(BaseModel):
     search: str | None = None
     #: Only Alphas the Evolution Lab can breed from, for when this table is a seed picker.
     evolvable: bool = False
+    #: Filter by pyramid categories (e.g. "Model" to match "ASI/D1/Model").
+    pyramids: list[str] | None = None
     limit: int = Field(default=100, ge=1, le=500)
     offset: int = Field(default=0, ge=0)
 

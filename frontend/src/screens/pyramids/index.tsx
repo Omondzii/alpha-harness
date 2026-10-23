@@ -287,7 +287,19 @@ export function PyramidsScreen() {
                         className="truncate pr-3 text-left font-normal text-ink-muted"
                         title={category.name}
                       >
-                        {category.name}
+                        <button
+                          type="button"
+                          className="hover:text-ink hover:underline"
+                          onClick={() => {
+                            navigate({
+                              to: '/pool/$tab',
+                              params: { tab: 'stored' },
+                              search: { pyramids: [category.name] },
+                            })
+                          }}
+                        >
+                          {category.name}
+                        </button>
                       </th>
                       {data.columns.map((column) => {
                         const id = `${column.region}-${column.delay}`

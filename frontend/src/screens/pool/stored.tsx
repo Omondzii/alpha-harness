@@ -1,7 +1,7 @@
 /** Stored alphas: the local vault, sorted and filtered in DuckDB, served a page at a time. */
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import { CopyIcon, SearchIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -172,6 +172,8 @@ export function Stored({
   onOpen: (alphaId: string) => void
   activeAlphaId: string | null
 }) {
+  const navigate = useNavigate()
+  const searchParams = useSearch({ from: '/pool/$tab' })
   const overview = useQuery({
     queryKey: ['pool', 'overview'],
     queryFn: pool.overview,
@@ -187,6 +189,7 @@ export function Stored({
   const [limit, setLimit] = useState(100)
   const [offset, setOffset] = useState(0)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [pyramids, setPyramids] = useState<string[]>(searchParams.pyramids || [])
   // Debounced rather than deferred: `useDeferredValue` still asks the backend once per keystroke.
   const quietSearch = useDebounced(search, 300)
   const quietBounds = useDebounced(bounds, 400)
@@ -215,6 +218,7 @@ export function Stored({
     delays: market ? [market.delay] : delays.length ? delays.map(Number) : null,
     universes: market ? [market.universe] : universes.length ? universes : null,
     search: quietSearch.trim() || null,
+    pyramids: pyramids.length ? pyramids : null,
     minimum: Object.fromEntries(
       BOUNDS.flatMap((b) => {
         const v = parseNum(quietBounds[b.key]?.min ?? '')
@@ -387,6 +391,31 @@ export function Stored({
                   </div>
                 </Fieldset>
               ))}
+              {pyramids.length > 0 && (
+                <Fieldset legend="Pyramid Filter">
+                  <div className="flex flex-wrap gap-1.5">
+                    {pyramids.map((p) => (
+                      <Badge key={p} tone="muted">
+                        {p}
+                      </Badge>
+                    ))}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setPyramids([])
+                        navigate({
+                          to: '/pool/$tab',
+                          params: { tab: 'stored' },
+                          search: (prev) => ({ ...prev, pyramids: undefined }),
+                        })
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </Fieldset>
+              )}
             </div>
           </div>
         </Disclosure>

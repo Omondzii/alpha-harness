@@ -7,9 +7,10 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
-import { Link, useParams } from '@tanstack/react-router'
+import { useParams } from '@tanstack/react-router'
 import { ArrowLeftIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { cn } from '@/lib/cn'
 import { DASH, fmt } from '@/lib/format'
 import { useRefetchOn } from '@/lib/ws'
@@ -171,6 +172,7 @@ function CheckSets({ rows }: { rows: RankedAlpha[] }) {
 
 export function TaskResultsScreen() {
   const { taskId } = useParams({ from: '/tasks/$taskId' })
+  const navigate = useNavigate()
   const id = Number(taskId)
   const [sort, setSort] = useState<Sort>({ key: 'warningCount', desc: false })
   const [alphaId, setAlphaId] = useState<string | null>(null)
@@ -253,7 +255,10 @@ export function TaskResultsScreen() {
             : 'Every Alpha this task produced'
         }
         actions={
-          <Button variant="ghost" render={<Link to="/tasks" />}>
+          <Button
+            variant="ghost"
+            onClick={() => navigate({ to: '/tasks', search: { taskId: id } })}
+          >
             <ArrowLeftIcon />
             Back to Tasks
           </Button>

@@ -132,6 +132,9 @@ const tasks = createRoute({ getParentRoute: () => root, path: '/tasks' })
 const tasksIndex = createRoute({
   getParentRoute: () => tasks,
   path: '/',
+  validateSearch: (search: Record<string, unknown>) => ({
+    taskId: typeof search['taskId'] === 'number' ? search['taskId'] : typeof search['taskId'] === 'string' ? Number(search['taskId']) : undefined,
+  }),
   component: lazyRouteComponent(() => import('@/screens/tasks'), 'TasksScreen'),
 })
 /** One task's whole result set, with room for the statistics the card cannot hold. */

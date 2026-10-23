@@ -2,7 +2,7 @@
 
 import { faTent, faTents } from '@fortawesome/free-solid-svg-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
   CopyIcon,
   EllipsisIcon,
@@ -250,10 +250,11 @@ type Act = { action: 'runAll' } | { action: 'run' | 'pause' | 'stop' | 'remove';
 
 export function TasksScreen() {
   const queryClient = useQueryClient()
+  const search = useSearch({ from: '/tasks' })
   const list = useQuery({ queryKey: ['lab-tasks'], queryFn: labTasks.list })
   useRefetchOn('studies', ['lab-tasks'], 2_000)
   useRefetchOn('simulations', ['lab-tasks'], 5_000)
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [selectedId, setSelectedId] = useState<number | null>((search as { taskId?: number }).taskId ?? null)
   const [editing, setEditing] = useState<LabTask | null>(null)
   const [renaming, setRenaming] = useState<LabTask | null>(null)
   const [confirming, setConfirming] = useState<Act | null>(null)
@@ -264,10 +265,13 @@ export function TasksScreen() {
 
   // Nothing picked yet: open on what is running, then stay there. Re-deriving this every render
   // would move the pane out from under the reader the moment that task finished.
+  // If nothing is running, open the first task by default.
   const running = list.data?.tasks.find((t) => t.status === 'RUNNING')?.id ?? null
+  const firstTask = list.data?.tasks[0]?.id ?? null
   useEffect(() => {
     if (running != null) setSelectedId((id) => id ?? running)
-  }, [running])
+    else if (firstTask != null) setSelectedId((id) => id ?? firstTask)
+  }, [running, firstTask])
 
   const act = useMutation({
     meta: { inline: true },

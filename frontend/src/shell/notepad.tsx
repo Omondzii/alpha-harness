@@ -1,10 +1,10 @@
-import { CopyIcon, NotebookPenIcon, Trash2Icon, XIcon } from 'lucide-react'
+import { CopyIcon, NotebookPenIcon, SaveIcon, Trash2Icon, XIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { errorMessage } from '@/api/http'
-import { Button, Field, Input, Textarea } from '@/ui/kit'
+import { Button, Field, Input } from '@/ui/kit'
 
 interface AlphaNote {
   alphaId: string
@@ -179,27 +179,28 @@ export function AlphaNotepadPanel() {
             className="num text-body-compact"
           />
         </Field>
-        <Field
-          label="Remark"
-          className="[&>span:first-child]:text-[10px] [&>span:first-child]:font-normal [&>span:first-child]:text-ink-subtle"
-        >
-          <Textarea
-            value={remark}
-            onChange={(event) => setRemark(event.target.value)}
-            placeholder="A short note (optional)"
-            rows={2}
-            className="min-h-12 resize-y text-body-compact"
-          />
-        </Field>
-        <div className="flex justify-end">
+        <div className="flex items-end gap-1.5">
+          <Field
+            label="Remark"
+            className="flex-1 [&>span:first-child]:text-[10px] [&>span:first-child]:font-normal [&>span:first-child]:text-ink-subtle"
+          >
+            <Input
+              value={remark}
+              onChange={(event) => setRemark(event.target.value)}
+              placeholder="Short remark (optional)"
+              maxLength={120}
+              className="text-body-compact"
+            />
+          </Field>
           <Button
             type="submit"
             variant="primary"
-            size="sm"
+            size="icon"
             disabled={!alphaId.trim()}
-            className="text-caption font-normal"
+            aria-label="Save Alpha"
+            title="Save Alpha"
           >
-            Save Alpha
+            <SaveIcon />
           </Button>
         </div>
       </form>
@@ -217,7 +218,7 @@ export function AlphaNotepadPanel() {
         ) : (
           <ul className="flex flex-col px-2 py-1">
             {[...entries]
-              .sort((a, b) => (a.savedAt ?? 0) - (b.savedAt ?? 0))
+              .sort((a, b) => (b.savedAt ?? 0) - (a.savedAt ?? 0))
               .map((entry, index, timeline) => (
                 <li
                   key={entry.alphaId}

@@ -52,9 +52,9 @@ export function AlphaNotepadToggle({ collapsed }: { collapsed: boolean }) {
       onClick={() => setOpen(!open)}
       className={`group flex h-8 items-center gap-3 rounded-md text-body transition-colors hover:bg-surface-3 hover:text-ink ${
         collapsed ? 'justify-center' : 'px-2'
-      } ${open ? 'bg-surface-4 font-medium text-ink' : 'text-ink-muted'}`}
+      } ${open ? 'bg-primary-subtle font-medium text-primary' : 'text-ink-muted'}`}
     >
-      <NotebookPenIcon className="size-4 shrink-0" aria-hidden />
+      <NotebookPenIcon className={`size-4 shrink-0 ${open ? 'text-primary' : ''}`} aria-hidden />
       {!collapsed && <span className="flex-1 truncate text-left">Alpha notepad</span>}
       {!collapsed && count > 0 && (
         <span className="num rounded-pill border border-hairline bg-surface-2 px-1.5 py-0.5 text-caption text-ink-subtle">
@@ -108,14 +108,21 @@ export function AlphaNotepadPanel() {
       role="dialog"
       aria-modal="false"
       aria-labelledby="alpha-notepad-title"
-      className="fixed bottom-3 left-3 z-50 flex max-h-[min(70vh,36rem)] w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-lg border border-hairline-strong bg-surface-2 shadow-float"
+      className="fixed bottom-3 left-3 z-50 flex max-h-[min(60vh,30rem)] w-[min(22rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-lg border border-hairline-strong bg-surface-1 shadow-float"
     >
-      <header className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-3">
-        <div className="min-w-0">
-          <h2 id="alpha-notepad-title" className="text-title font-medium text-ink">
-            Alpha notepad
-          </h2>
-          <p className="text-caption text-ink-subtle">Keep IDs and quick remarks on this device.</p>
+      <header className="flex items-center justify-between gap-3 border-b border-hairline bg-surface-2 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary-subtle text-primary">
+            <NotebookPenIcon className="size-4" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <h2 id="alpha-notepad-title" className="text-body font-normal text-ink">
+              Alpha notepad
+            </h2>
+            <p className="text-[10px] font-normal text-ink-subtle">
+              Keep IDs and quick remarks on this device.
+            </p>
+          </div>
         </div>
         <Button
           variant="ghost"
@@ -126,38 +133,56 @@ export function AlphaNotepadPanel() {
           <XIcon />
         </Button>
       </header>
-      <form onSubmit={addNote} className="flex flex-col gap-2 border-b border-hairline p-3">
-        <Field label="Alpha ID">
+      <form
+        onSubmit={addNote}
+        className="flex flex-col gap-1.5 border-b border-hairline bg-surface-2 p-2.5"
+      >
+        <Field
+          label="Alpha ID"
+          className="[&>span:first-child]:text-[10px] [&>span:first-child]:font-normal [&>span:first-child]:text-ink-subtle"
+        >
           <Input
             value={alphaId}
             onChange={(event) => setAlphaId(event.target.value)}
             placeholder="Paste an Alpha ID"
             autoComplete="off"
             autoFocus
+            className="num text-body-compact"
           />
         </Field>
-        <Field label="Remark">
+        <Field
+          label="Remark"
+          className="[&>span:first-child]:text-[10px] [&>span:first-child]:font-normal [&>span:first-child]:text-ink-subtle"
+        >
           <Textarea
             value={remark}
             onChange={(event) => setRemark(event.target.value)}
             placeholder="A short note (optional)"
             rows={2}
-            className="min-h-16 resize-y"
+            className="min-h-12 resize-y text-body-compact"
           />
         </Field>
         <div className="flex justify-end">
-          <Button type="submit" variant="primary" size="sm" disabled={!alphaId.trim()}>
+          <Button
+            type="submit"
+            variant="primary"
+            size="sm"
+            disabled={!alphaId.trim()}
+            className="text-caption font-normal"
+          >
             Save Alpha
           </Button>
         </div>
       </form>
-      <div className="flex items-center justify-between gap-2 border-b border-hairline px-3 py-2">
-        <span className="text-caption text-ink-subtle">
+      <div className="flex items-center justify-between gap-2 border-b border-hairline bg-surface-1 px-2.5 py-1.5">
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-normal text-ink-subtle">
+          <NotebookPenIcon className="size-3 text-primary" aria-hidden />
           {entries.length} {entries.length === 1 ? 'Alpha' : 'Alphas'}
         </span>
         <Button
           size="sm"
           disabled={entries.length === 0}
+          className="text-caption font-normal"
           onClick={() =>
             copy(
               entries.map((entry) => entry.alphaId).join('\n'),
@@ -170,19 +195,22 @@ export function AlphaNotepadPanel() {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {entries.length === 0 ? (
-          <p className="p-4 text-body-compact text-ink-subtle">
+          <p className="p-3 text-caption font-normal text-ink-subtle">
             Add an Alpha ID above to start your notepad.
           </p>
         ) : (
-          <ul className="divide-y divide-hairline">
+          <ul className="flex flex-col gap-1 p-1.5">
             {entries.map((entry) => (
-              <li key={entry.alphaId} className="flex min-w-0 items-start gap-2 px-3 py-2.5">
+              <li
+                key={entry.alphaId}
+                className="flex min-w-0 items-start gap-1.5 rounded-md border border-hairline bg-surface-2 px-2 py-1.5 transition-colors hover:bg-surface-3"
+              >
                 <div className="min-w-0 flex-1">
-                  <p className="num break-all text-body-compact font-medium text-ink">
+                  <p className="num break-all text-caption font-normal text-ink-muted">
                     {entry.alphaId}
                   </p>
                   {entry.remark && (
-                    <p className="mt-1 whitespace-pre-wrap break-words text-caption text-ink-muted">
+                    <p className="mt-1 whitespace-pre-wrap break-words text-[10px] font-normal text-ink-subtle">
                       {entry.remark}
                     </p>
                   )}

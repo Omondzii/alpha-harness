@@ -16,6 +16,7 @@ import { Button, Empty, LINK, Notice, Skeleton, Spinner } from '@/ui/kit'
 import { ResizeHandle, useMediaQuery, WIDE } from '@/ui/panels'
 import { CommandMenu } from './command-menu'
 import { Header } from './header'
+import { AlphaNotepadPanel } from './notepad'
 import { SettingsDialog } from './settings'
 import { SIDEBAR_WIDTH, Sidebar, useSidebarHidden } from './sidebar'
 import { SignIn } from './sign-in'
@@ -181,6 +182,7 @@ function Workspace({ you }: { you: Today['you'] }) {
       )}
       <CommandMenu />
       <SettingsDialog />
+      <AlphaNotepadPanel />
       <InstallingOverlay />
     </div>
   )

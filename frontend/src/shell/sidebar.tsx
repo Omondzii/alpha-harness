@@ -5,7 +5,6 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useRouterState } from '@tanstack/react-router'
-import { useLastTaskId } from '@/screens/tasks'
 import {
   ChevronsUpDownIcon,
   ExternalLinkIcon,
@@ -22,9 +21,11 @@ import type { Today } from '@/api/types'
 import { cn } from '@/lib/cn'
 import { useRefetchOn } from '@/lib/ws'
 import { pool } from '@/screens/pool/api'
+import { useLastTaskId } from '@/screens/tasks'
 import { Button, Kbd } from '@/ui/kit'
 import { Confirm, Menu, Tooltip } from '@/ui/overlay'
 import { NAV } from './nav'
+import { AlphaNotepadToggle } from './notepad'
 import { SETTINGS_SHORTCUT, useSettings } from './settings'
 import { UpdateBadge, useQuitApp, useUpdateStatus, VersionBadge } from './update'
 
@@ -223,6 +224,7 @@ export function Sidebar({
             </Link>
           </Fragment>
         ))}
+        <AlphaNotepadToggle collapsed={collapsed} />
       </nav>
 
       <div className="flex flex-col gap-1 border-t border-hairline p-2">

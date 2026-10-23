@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { errorMessage } from '@/api/http'
 import type { Scope } from '@/api/types'
+import { cn } from '@/lib/cn'
 import { fmt } from '@/lib/format'
 import { REGION_AGNOSTIC, regionLabel } from '@/lib/scope'
 import { useDebounced } from '@/lib/use-debounced'
@@ -330,6 +331,33 @@ export function Stored({
             </Button>
           )}
         </div>
+
+        {!market && regionItems.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-caption text-ink-subtle">Region:</span>
+            {regionItems.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                className={cn(
+                  'rounded-sm border px-2 py-0.5 text-caption transition-colors',
+                  regions.includes(item.value)
+                    ? 'border-primary bg-primary-subtle text-primary'
+                    : 'border-hairline text-ink-subtle hover:border-hairline-strong hover:text-ink',
+                )}
+                onClick={() => {
+                  if (regions.includes(item.value)) {
+                    reset(setRegions)(regions.filter((r) => r !== item.value))
+                  } else {
+                    reset(setRegions)([...regions, item.value])
+                  }
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <Disclosure summary={activeBounds ? `Filters (${activeBounds} active)` : 'Filters'}>
           <div className="flex flex-col gap-4">

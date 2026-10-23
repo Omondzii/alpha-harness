@@ -9,6 +9,35 @@ import { Button, Field, Input, Textarea } from '@/ui/kit'
 interface AlphaNote {
   alphaId: string
   remark: string
+  savedAt?: number
+}
+
+const CLOCK = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' })
+const SHORT_DATE = new Intl.DateTimeFormat(undefined, {
+  month: 'numeric',
+  day: 'numeric',
+  year: '2-digit',
+})
+
+function timelineLabel(savedAt: number | undefined): string {
+  if (savedAt == null || !Number.isFinite(savedAt)) return '—'
+  const date = new Date(savedAt)
+  if (Number.isNaN(date.getTime())) return '—'
+  const now = new Date()
+  const age = Date.now() - savedAt
+  const isToday =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  return isToday || (age >= 0 && age < 24 * 60 * 60 * 1000)
+    ? CLOCK.format(date)
+    : SHORT_DATE.format(date)
+}
+
+function timelineIso(savedAt: number | undefined): string | undefined {
+  if (savedAt == null || !Number.isFinite(savedAt)) return undefined
+  const date = new Date(savedAt)
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
 }
 
 const useAlphaNotepad = create<{
@@ -89,7 +118,7 @@ export function AlphaNotepadPanel() {
     event.preventDefault()
     const id = alphaId.trim()
     if (!id) return
-    save({ alphaId: id, remark: remark.trim() })
+    save({ alphaId: id, remark: remark.trim(), savedAt: Date.now() })
     setAlphaId('')
     setRemark('')
   }
@@ -174,24 +203,11 @@ export function AlphaNotepadPanel() {
           </Button>
         </div>
       </form>
-      <div className="flex items-center justify-between gap-2 border-b border-hairline bg-surface-1 px-2.5 py-1.5">
+      <div className="flex items-center gap-1.5 border-b border-hairline bg-surface-1 px-2.5 py-1.5">
         <span className="inline-flex items-center gap-1.5 text-[10px] font-normal text-ink-subtle">
           <NotebookPenIcon className="size-3 text-primary" aria-hidden />
           {entries.length} {entries.length === 1 ? 'Alpha' : 'Alphas'}
         </span>
-        <Button
-          size="sm"
-          disabled={entries.length === 0}
-          className="text-caption font-normal"
-          onClick={() =>
-            copy(
-              entries.map((entry) => entry.alphaId).join('\n'),
-              `Copied ${entries.length} Alpha IDs`,
-            )
-          }
-        >
-          <CopyIcon /> Copy all IDs
-        </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {entries.length === 0 ? (
@@ -199,42 +215,58 @@ export function AlphaNotepadPanel() {
             Add an Alpha ID above to start your notepad.
           </p>
         ) : (
-          <ul className="flex flex-col gap-1 p-1.5">
-            {entries.map((entry) => (
-              <li
-                key={entry.alphaId}
-                className="flex min-w-0 items-start gap-1.5 rounded-md border border-hairline bg-surface-2 px-2 py-1.5 transition-colors hover:bg-surface-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="num break-all text-caption font-normal text-ink-muted">
-                    {entry.alphaId}
-                  </p>
-                  {entry.remark && (
-                    <p className="mt-1 whitespace-pre-wrap break-words text-[10px] font-normal text-ink-subtle">
-                      {entry.remark}
-                    </p>
-                  )}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Copy ${entry.alphaId}`}
-                  title="Copy Alpha ID"
-                  onClick={() => copy(entry.alphaId, `Copied ${entry.alphaId}`)}
+          <ul className="flex flex-col px-2 py-1">
+            {[...entries]
+              .sort((a, b) => (a.savedAt ?? 0) - (b.savedAt ?? 0))
+              .map((entry, index, timeline) => (
+                <li
+                  key={entry.alphaId}
+                  className="grid min-w-0 grid-cols-[2.75rem_0.75rem_minmax(0,1fr)] gap-1.5 py-1"
                 >
-                  <CopyIcon />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Remove ${entry.alphaId}`}
-                  title="Remove Alpha"
-                  onClick={() => remove(entry.alphaId)}
-                >
-                  <Trash2Icon />
-                </Button>
-              </li>
-            ))}
+                  <time
+                    dateTime={timelineIso(entry.savedAt)}
+                    className="num pt-2 text-right text-[10px] font-normal text-ink-subtle"
+                  >
+                    {timelineLabel(entry.savedAt)}
+                  </time>
+                  <span className="relative flex justify-center">
+                    {index < timeline.length - 1 && (
+                      <span className="absolute top-2 bottom-0 w-px bg-hairline-strong" />
+                    )}
+                    <span className="relative z-10 mt-2 size-2 rounded-pill border border-primary/40 bg-primary-subtle" />
+                  </span>
+                  <div className="flex min-w-0 items-start gap-1.5 rounded-md border border-hairline bg-surface-2 px-2 py-1.5 transition-colors hover:bg-surface-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="num break-all text-caption font-normal text-ink-muted">
+                        {entry.alphaId}
+                      </p>
+                      {entry.remark && (
+                        <p className="mt-1 whitespace-pre-wrap break-words text-[10px] font-normal text-ink-subtle">
+                          {entry.remark}
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Copy ${entry.alphaId}`}
+                      title="Copy Alpha ID"
+                      onClick={() => copy(entry.alphaId, `Copied ${entry.alphaId}`)}
+                    >
+                      <CopyIcon />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Remove ${entry.alphaId}`}
+                      title="Remove Alpha"
+                      onClick={() => remove(entry.alphaId)}
+                    >
+                      <Trash2Icon />
+                    </Button>
+                  </div>
+                </li>
+              ))}
           </ul>
         )}
       </div>

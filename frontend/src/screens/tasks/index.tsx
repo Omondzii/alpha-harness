@@ -67,6 +67,19 @@ const SETTINGS_SAMPLER = 'settings-sampler'
 /** Matches `labs.params.TEMPLATE_SAMPLER`. */
 const TEMPLATE_SAMPLER = 'template'
 
+export const useLastTaskId = create<{
+  taskId: number | null
+  setTaskId: (id: number | null) => void
+}>()(
+  persist(
+    (set) => ({
+      taskId: null,
+      setTaskId: (id) => set({ taskId: id }),
+    }),
+    { name: 'alpha-harness-last-task-id' },
+  ),
+)
+
 function StashIcon({ icon, className }: { icon: typeof faTent; className?: string }) {
   const [width, height, , , iconPath] = icon.icon
   const paths = Array.isArray(iconPath) ? iconPath : [iconPath]
@@ -251,6 +264,7 @@ type Act = { action: 'runAll' } | { action: 'run' | 'pause' | 'stop' | 'remove';
 export function TasksScreen() {
   const queryClient = useQueryClient()
   const search = useSearch({ from: '/tasks' })
+  const setLastTaskId = useLastTaskId((state) => state.setTaskId)
   const list = useQuery({ queryKey: ['lab-tasks'], queryFn: labTasks.list })
   useRefetchOn('studies', ['lab-tasks'], 2_000)
   useRefetchOn('simulations', ['lab-tasks'], 5_000)
@@ -272,6 +286,11 @@ export function TasksScreen() {
     if (running != null) setSelectedId((id) => id ?? running)
     else if (firstTask != null) setSelectedId((id) => id ?? firstTask)
   }, [running, firstTask])
+
+  // Save the selected task ID to the store when it changes
+  useEffect(() => {
+    if (selectedId != null) setLastTaskId(selectedId)
+  }, [selectedId, setLastTaskId])
 
   const act = useMutation({
     meta: { inline: true },

@@ -5,6 +5,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useRouterState } from '@tanstack/react-router'
+import { useLastTaskId } from '@/screens/tasks'
 import {
   ChevronsUpDownIcon,
   ExternalLinkIcon,
@@ -140,6 +141,7 @@ export function Sidebar({
   })
   const visited = useVisited((s) => s.visited)
   const visit = useVisited((s) => s.visit)
+  const lastTaskId = useLastTaskId((state) => state.taskId)
   // Reaching the area any way counts (sidebar, ⌘K or a link), so the flash never outlives the visit.
   useEffect(() => {
     if (ONBOARDING.includes(area)) visit(area)
@@ -197,6 +199,7 @@ export function Sidebar({
               ))}
             <Link
               to={item.to}
+              {...(item.to === '/tasks' && lastTaskId ? { search: { taskId: lastTaskId } } : {})}
               title={item.label}
               {...(collapsed && { 'aria-label': item.label })}
               className={cn(

@@ -189,7 +189,7 @@ export function Stored({
   const [limit, setLimit] = useState(100)
   const [offset, setOffset] = useState(0)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [pyramids, setPyramids] = useState<string[]>(searchParams.pyramids || [])
+  const [pyramids, setPyramids] = useState<string[]>((searchParams as { pyramids?: string[] }).pyramids || [])
   // Debounced rather than deferred: `useDeferredValue` still asks the backend once per keystroke.
   const quietSearch = useDebounced(search, 300)
   const quietBounds = useDebounced(bounds, 400)

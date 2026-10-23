@@ -149,12 +149,17 @@ const poolIndex = createRoute({
   getParentRoute: () => pool,
   path: '/',
   beforeLoad: () => {
-    throw redirect({ to: '/pool/$tab', params: { tab: 'stored' } })
+    throw redirect({ to: '/pool/$tab', params: { tab: 'stored' }, search: { pyramids: undefined } })
   },
 })
 const poolTab = createRoute({
   getParentRoute: () => pool,
   path: '$tab',
+  validateSearch: (search: Record<string, unknown>) => {
+    return {
+      pyramids: Array.isArray(search['pyramids']) ? search['pyramids'] as string[] : undefined,
+    }
+  },
   component: lazyRouteComponent(() => import('@/screens/pool'), 'PoolScreen'),
 })
 

@@ -137,7 +137,7 @@ export function AlphaNotepadPanel() {
       role="dialog"
       aria-modal="false"
       aria-labelledby="alpha-notepad-title"
-      className="animate-[alpha-notepad-enter_160ms_ease-out] fixed bottom-3 left-3 z-50 flex max-h-[min(60vh,40rem)] w-[min(20rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-lg border border-hairline-strong bg-surface-1 shadow-float"
+      className="animate-[alpha-notepad-enter_160ms_ease-out] fixed bottom-3 left-3 z-50 flex max-h-[min(60vh,40rem)] w-[min(20rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-lg border border-hairline-strong bg-surface-1 shadow-float pb-2"
     >
       <header className="flex items-center justify-between gap-3 border-b border-hairline bg-surface-2 px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
@@ -216,7 +216,7 @@ export function AlphaNotepadPanel() {
           {entries.length} {entries.length === 1 ? 'Alpha' : 'Alphas'}
         </span>
       </div>
-      <div className="min-h-0 max-h-40 flex-1 overflow-y-auto">
+      <div className="min-h-0 max-h-40 flex-1 overflow-y-auto pb-2">
         {entries.length === 0 ? (
           <p className="p-3 text-caption font-normal text-ink-subtle">
             Add an Alpha ID above to start your notepad.

@@ -155,10 +155,10 @@ export function AlphaNotepadPanel() {
         </div>
         <Button
           variant="ghost"
-          size="icon-sm"
+          size="icon"
           aria-label="Close alpha notepad"
           onClick={() => setOpen(false)}
-          className="cursor-pointer"
+          className="cursor-pointer rounded-md bg-surface-3/70 text-ink-subtle hover:bg-surface-4 hover:text-ink"
         >
           <XIcon />
         </Button>

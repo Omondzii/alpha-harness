@@ -137,7 +137,7 @@ export function AlphaNotepadPanel() {
       role="dialog"
       aria-modal="false"
       aria-labelledby="alpha-notepad-title"
-      className="animate-[alpha-notepad-enter_160ms_ease-out] fixed bottom-3 left-3 z-50 flex max-h-[min(60vh,30rem)] w-[min(19rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-lg border border-hairline-strong bg-surface-1 shadow-float"
+      className="animate-[alpha-notepad-enter_160ms_ease-out] fixed bottom-3 left-3 z-50 flex max-h-[min(60vh,40rem)] w-[min(20rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-lg border border-hairline-strong bg-surface-1 shadow-float"
     >
       <header className="flex items-center justify-between gap-3 border-b border-hairline bg-surface-2 px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
@@ -195,12 +195,16 @@ export function AlphaNotepadPanel() {
           </Field>
           <Button
             type="submit"
-            variant="primary"
+            variant="ghost"
             size="icon"
             disabled={!alphaId.trim()}
             aria-label="Save Alpha"
             title="Save Alpha"
-            className="cursor-pointer"
+            className={`cursor-pointer disabled:cursor-not-allowed ${
+              alphaId.trim()
+                ? 'bg-pnl-positive-tint text-pnl-positive-text hover:bg-pnl-positive-tint hover:text-pnl-positive-text'
+                : 'bg-surface-3/70 text-ink-subtle hover:bg-surface-3 hover:text-ink-muted disabled:bg-surface-3/70 disabled:text-ink-subtle'
+            }`}
           >
             <SendIcon />
           </Button>
@@ -218,7 +222,7 @@ export function AlphaNotepadPanel() {
             Add an Alpha ID above to start your notepad.
           </p>
         ) : (
-          <ul className="flex flex-col px-2 py-1">
+          <ul className="flex flex-col px-2 pt-1 pb-2">
             {[...entries]
               .sort((a, b) => (b.savedAt ?? 0) - (a.savedAt ?? 0))
               .map((entry, index, timeline) => (

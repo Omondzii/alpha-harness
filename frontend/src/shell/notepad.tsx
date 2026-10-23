@@ -1,4 +1,4 @@
-import { CopyIcon, NotebookPenIcon, SaveIcon, Trash2Icon, XIcon } from 'lucide-react'
+import { CopyIcon, NotebookPenIcon, SendIcon, Trash2Icon, XIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { create } from 'zustand'
@@ -79,7 +79,7 @@ export function AlphaNotepadToggle({ collapsed }: { collapsed: boolean }) {
       aria-expanded={open}
       title="Alpha notepad"
       onClick={() => setOpen(!open)}
-      className={`group flex h-8 items-center gap-3 rounded-md text-body transition-colors hover:bg-surface-3 hover:text-ink ${
+      className={`group flex h-8 cursor-pointer items-center gap-3 rounded-md text-body transition-colors hover:bg-surface-3 hover:text-ink ${
         collapsed ? 'justify-center' : 'px-2'
       } ${open ? 'bg-primary-subtle font-medium text-primary' : 'text-ink-muted'}`}
     >
@@ -137,7 +137,7 @@ export function AlphaNotepadPanel() {
       role="dialog"
       aria-modal="false"
       aria-labelledby="alpha-notepad-title"
-      className="fixed bottom-3 left-3 z-50 flex max-h-[min(60vh,30rem)] w-[min(22rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-lg border border-hairline-strong bg-surface-1 shadow-float"
+      className="animate-[alpha-notepad-enter_160ms_ease-out] fixed bottom-3 left-3 z-50 flex max-h-[min(60vh,30rem)] w-[min(19rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-lg border border-hairline-strong bg-surface-1 shadow-float"
     >
       <header className="flex items-center justify-between gap-3 border-b border-hairline bg-surface-2 px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
@@ -158,6 +158,7 @@ export function AlphaNotepadPanel() {
           size="icon-sm"
           aria-label="Close alpha notepad"
           onClick={() => setOpen(false)}
+          className="cursor-pointer"
         >
           <XIcon />
         </Button>
@@ -176,7 +177,7 @@ export function AlphaNotepadPanel() {
             placeholder="Paste an Alpha ID"
             autoComplete="off"
             autoFocus
-            className="num text-body-compact"
+            className="num cursor-text text-body-compact"
           />
         </Field>
         <div className="flex items-end gap-1.5">
@@ -189,7 +190,7 @@ export function AlphaNotepadPanel() {
               onChange={(event) => setRemark(event.target.value)}
               placeholder="Short remark (optional)"
               maxLength={120}
-              className="text-body-compact"
+              className="cursor-text text-body-compact"
             />
           </Field>
           <Button
@@ -199,8 +200,9 @@ export function AlphaNotepadPanel() {
             disabled={!alphaId.trim()}
             aria-label="Save Alpha"
             title="Save Alpha"
+            className="cursor-pointer"
           >
-            <SaveIcon />
+            <SendIcon />
           </Button>
         </div>
       </form>
@@ -210,7 +212,7 @@ export function AlphaNotepadPanel() {
           {entries.length} {entries.length === 1 ? 'Alpha' : 'Alphas'}
         </span>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 max-h-40 flex-1 overflow-y-auto">
         {entries.length === 0 ? (
           <p className="p-3 text-caption font-normal text-ink-subtle">
             Add an Alpha ID above to start your notepad.
@@ -222,7 +224,7 @@ export function AlphaNotepadPanel() {
               .map((entry, index, timeline) => (
                 <li
                   key={entry.alphaId}
-                  className="grid min-w-0 grid-cols-[2.75rem_0.75rem_minmax(0,1fr)] gap-1.5 py-1"
+                  className="grid min-w-0 grid-cols-[2.5rem_0.75rem_minmax(0,1fr)] gap-1.5 py-1"
                 >
                   <time
                     dateTime={timelineIso(entry.savedAt)}
@@ -242,7 +244,10 @@ export function AlphaNotepadPanel() {
                         {entry.alphaId}
                       </p>
                       {entry.remark && (
-                        <p className="mt-1 whitespace-pre-wrap break-words text-[10px] font-normal text-ink-subtle">
+                        <p
+                          title={entry.remark}
+                          className="mt-1 truncate text-[10px] font-normal text-ink-subtle"
+                        >
                           {entry.remark}
                         </p>
                       )}
@@ -253,6 +258,7 @@ export function AlphaNotepadPanel() {
                       aria-label={`Copy ${entry.alphaId}`}
                       title="Copy Alpha ID"
                       onClick={() => copy(entry.alphaId, `Copied ${entry.alphaId}`)}
+                      className="cursor-pointer"
                     >
                       <CopyIcon />
                     </Button>
@@ -262,6 +268,7 @@ export function AlphaNotepadPanel() {
                       aria-label={`Remove ${entry.alphaId}`}
                       title="Remove Alpha"
                       onClick={() => remove(entry.alphaId)}
+                      className="cursor-pointer"
                     >
                       <Trash2Icon />
                     </Button>

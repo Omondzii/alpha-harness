@@ -113,6 +113,10 @@ function Body({ alphaId }: { alphaId: string }) {
     const region = d.settings.region || 'USA'
     const universe = d.settings.universe
     const neutralization = d.settings.neutralization
+    const investability: ('none' | 'max_trade' | 'max_position')[] = []
+    if (d.settings.maxTrade === 'ON') investability.push('max_trade')
+    if (d.settings.maxPosition === 'ON') investability.push('max_position')
+    if (investability.length === 0) investability.push('none')
     setTemplateLab({
       region,
       delay: d.settings.delay ?? 1,
@@ -120,7 +124,7 @@ function Body({ alphaId }: { alphaId: string }) {
       variables: {},
       universes: universe ? [universe] : [],
       neutralizations: neutralization ? [neutralization] : [],
-      investability: [],
+      investability,
       decay: String(d.settings.decay ?? 0),
       truncation: String(d.settings.truncation ?? 0.08),
       pasteurization: 'ON',

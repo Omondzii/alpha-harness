@@ -1,7 +1,7 @@
 /** One stored alpha: PnL, settings, submission checks, and correlations on request. */
 
 import { useQueries, useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { CopyIcon, MaximizeIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -27,6 +27,7 @@ import {
 } from '@/ui/kit'
 import { Sheet } from '@/ui/overlay'
 import { AlphaActionsMenu, AstInspector, checkFigure, OpenInBrain, RecheckButton } from './shared'
+import { useTemplateLab } from '@/screens/research-labs/template/state'
 
 type Kind = 'self' | 'prod'
 const KIND_LABEL: Record<Kind, string> = {
@@ -102,6 +103,41 @@ function Body({ alphaId }: { alphaId: string }) {
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   })
   const [kinds, setKinds] = useState<Kind[]>([])
+  const navigate = useNavigate()
+  const setTemplateLab = useTemplateLab.setState
+
+  const openInTemplateLab = () => {
+    const d = detail.data
+    if (!d) return
+    const expression = d.expression ?? ''
+    const region = d.settings.region || 'USA'
+    const universe = d.settings.universe
+    const neutralization = d.settings.neutralization
+    setTemplateLab({
+      region,
+      delay: d.settings.delay ?? 1,
+      text: expression,
+      variables: {},
+      universes: universe ? [universe] : [],
+      neutralizations: neutralization ? [neutralization] : [],
+      investability: [],
+      decay: String(d.settings.decay ?? 0),
+      truncation: String(d.settings.truncation ?? 0.08),
+      pasteurization: 'ON',
+      nanHandling: 'ON',
+      testYears: '2',
+      testMonths: '0',
+      cores: null,
+      simulations: null,
+      templateId: null,
+      name: '',
+      dirty: false,
+      opened: { text: expression, variables: {} },
+      picking: null,
+      view: 'code',
+    })
+    void navigate({ to: '/labs/template' })
+  }
 
   if (detail.isPending) return <Skeleton className="h-60" />
   if (detail.isError) return <ErrorNotice error={detail.error} title="Could not load this Alpha" />
@@ -121,6 +157,9 @@ function Body({ alphaId }: { alphaId: string }) {
           >
             <MaximizeIcon aria-hidden />
             Open Full Page
+          </Button>
+          <Button size="sm" variant="secondary" onClick={openInTemplateLab}>
+            Open in Template Lab
           </Button>
           <OpenInBrain url={d.brainUrl} />
           <RecheckButton alphaId={d.alphaId} />
@@ -199,6 +238,9 @@ function Body({ alphaId }: { alphaId: string }) {
         >
           <MaximizeIcon aria-hidden />
           Open Full Page
+        </Button>
+        <Button size="sm" variant="secondary" onClick={openInTemplateLab}>
+          Open in Template Lab
         </Button>
         <OpenInBrain url={d.brainUrl} />
         <RecheckButton alphaId={d.alphaId} />

@@ -1,14 +1,11 @@
-/** Tools: every tool, two by two, in the same cards as Research Labs so the two group
- *  screens read as one pattern. */
+/** Tools: a three-part guide to every tool. */
 
 import { Link } from '@tanstack/react-router'
-import { ListChecksIcon, type LucideIcon, SlidersHorizontalIcon, UnlinkIcon } from 'lucide-react'
 import { useState } from 'react'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { HUB_CARD, HubCardBody } from '@/screens/research-labs'
 import { TOOL_TABS } from '@/shell/nav'
-import { Checkbox, Empty, Page, PageHeader, Segmented } from '@/ui/kit'
+import { Checkbox, Empty, Page, Segmented } from '@/ui/kit'
 
 type ToolTab = (typeof TOOL_TABS)[number]['tab']
 
@@ -29,12 +26,6 @@ const useFavoriteTools = create<{
     { name: 'alpha-harness-favorite-tools' },
   ),
 )
-
-const ICONS: Record<(typeof TOOL_TABS)[number]['tab'], LucideIcon> = {
-  'settings-sampler': SlidersHorizontalIcon,
-  'submission-planner': ListChecksIcon,
-  'correlation-breaker': UnlinkIcon,
-}
 
 /** What each one is for, since a name alone does not say when to reach for it. */
 const ABOUT: Record<(typeof TOOL_TABS)[number]['tab'], string> = {
@@ -59,10 +50,18 @@ export function ToolsScreen() {
     view === 'favorites' ? TOOL_TABS.filter((tool) => favorites.includes(tool.tab)) : TOOL_TABS
 
   return (
-    <Page>
-      <PageHeader
-        title="Tools"
-        actions={
+    <Page className="min-h-full">
+      <section className="flex min-h-[calc(100dvh-7rem)] flex-col bg-canvas px-6 py-6 text-ink sm:px-10 sm:py-8 lg:px-14 lg:py-10">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-body-compact font-medium uppercase tracking-[0.18em] text-ink-subtle">
+              Setup
+            </p>
+            <span className="mt-4 block h-px w-8 bg-hairline-strong" aria-hidden />
+            <h1 className="mt-4 text-[clamp(2rem,4vw,3rem)] font-semibold leading-tight tracking-tight text-ink">
+              Choose your tool
+            </h1>
+          </div>
           <Segmented
             label="Tool list"
             items={[
@@ -72,36 +71,51 @@ export function ToolsScreen() {
             value={view}
             onChange={setView}
           />
-        }
-      />
-      {tools.length === 0 ? (
-        <Empty title="No favorite tools yet">Check Favorite on a tool to save it here.</Empty>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {tools.map((tool) => {
-            const index = TOOL_TABS.findIndex((item) => item.tab === tool.tab)
-            return (
-              <div key={tool.tab} className="relative">
-                <Link to={tool.to} search={SEARCH[tool.tab]} className={HUB_CARD}>
-                  <HubCardBody
-                    icon={ICONS[tool.tab]}
-                    index={index}
-                    label={tool.label}
-                    about={ABOUT[tool.tab]}
-                  />
-                </Link>
-                <Checkbox
-                  label="Favorite"
-                  checked={favorites.includes(tool.tab)}
-                  onChange={(checked) => toggleFavorite(tool.tab, checked)}
-                  aria-label={`Favorite ${tool.label}`}
-                  className="absolute top-6 right-6 z-10 rounded-sm border border-hairline bg-surface-1 px-2 py-1"
-                />
-              </div>
-            )
-          })}
+        </header>
+        <div className="mt-6">
+          {tools.length === 0 ? (
+            <Empty title="No favorite tools yet">Check Favorite on a tool to save it here.</Empty>
+          ) : (
+            <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 xl:grid-cols-3">
+              {tools.map((tool) => {
+                const index = TOOL_TABS.findIndex((item) => item.tab === tool.tab)
+                return (
+                  <div key={tool.tab} className="relative">
+                    <Link
+                      to={tool.to}
+                      search={SEARCH[tool.tab]}
+                      className="group flex min-h-56 min-w-0 flex-col rounded-lg border border-hairline bg-surface-1 p-5 transition-colors hover:border-hairline-strong hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+                    >
+                      <span
+                        className={`text-[clamp(2.5rem,5vw,4rem)] font-semibold leading-none tracking-[-0.08em] transition-colors ${
+                          index === 1
+                            ? 'text-primary'
+                            : 'text-ink-tertiary group-hover:text-primary/70'
+                        }`}
+                      >
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <h2 className="mt-auto pt-8 text-[clamp(1.125rem,1.5vw,1.375rem)] font-semibold leading-snug tracking-tight text-ink">
+                        {tool.label}
+                      </h2>
+                      <p className="mt-2 text-body leading-snug text-ink-subtle">
+                        {ABOUT[tool.tab]}
+                      </p>
+                    </Link>
+                    <Checkbox
+                      label="Favorite"
+                      checked={favorites.includes(tool.tab)}
+                      onChange={(checked) => toggleFavorite(tool.tab, checked)}
+                      aria-label={`Favorite ${tool.label}`}
+                      className="absolute top-4 right-4 z-10 rounded-sm border border-hairline bg-surface-1 px-2 py-1 text-ink-subtle"
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
-      )}
+      </section>
     </Page>
   )
 }

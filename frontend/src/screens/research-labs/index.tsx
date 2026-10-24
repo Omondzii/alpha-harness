@@ -1,25 +1,9 @@
-/** Research Labs: every lab, two by two. */
+/** Research Labs: a five-part guide to every lab. */
 
 import { Link } from '@tanstack/react-router'
-import {
-  ArrowUpRightIcon,
-  BracesIcon,
-  DnaIcon,
-  LayersIcon,
-  type LucideIcon,
-  SearchIcon,
-  ZapIcon,
-} from 'lucide-react'
+import { ArrowUpRightIcon, type LucideIcon } from 'lucide-react'
 import { LAB_TABS } from '@/shell/nav'
-import { Page, PageHeader } from '@/ui/kit'
-
-const ICONS: Record<(typeof LAB_TABS)[number]['tab'], LucideIcon> = {
-  search: SearchIcon,
-  template: BracesIcon,
-  evolution: DnaIcon,
-  'power-pool': ZapIcon,
-  'super-alpha': LayersIcon,
-}
+import { Page } from '@/ui/kit'
 
 /** What each one searches, since a name alone does not say which to start with. */
 const ABOUT: Record<(typeof LAB_TABS)[number]['tab'], string> = {
@@ -69,20 +53,39 @@ export function HubCardBody({
 
 export function ResearchLabsScreen() {
   return (
-    <Page>
-      <PageHeader title="Research Labs" />
-      <div className="grid gap-3 sm:grid-cols-2">
-        {LAB_TABS.map((lab, index) => (
-          <Link key={lab.tab} to={lab.to} className={HUB_CARD}>
-            <HubCardBody
-              icon={ICONS[lab.tab]}
-              index={index}
-              label={lab.label}
-              about={ABOUT[lab.tab]}
-            />
-          </Link>
-        ))}
-      </div>
+    <Page className="min-h-full">
+      <section className="flex min-h-[calc(100dvh-7rem)] flex-col bg-canvas px-6 py-6 text-ink sm:px-10 sm:py-8 lg:px-14 lg:py-10">
+        <header>
+          <p className="text-body-compact font-medium uppercase tracking-[0.18em] text-ink-subtle">
+            Research Labs
+          </p>
+          <span className="mt-4 block h-px w-8 bg-hairline-strong" aria-hidden />
+          <h1 className="mt-4 max-w-lg text-[clamp(2rem,4vw,3rem)] font-semibold leading-tight tracking-tight text-ink">
+            Choose your lab
+          </h1>
+        </header>
+        <div className="mt-6 grid gap-x-6 gap-y-10 sm:grid-cols-2 xl:grid-cols-5">
+          {LAB_TABS.map((lab, index) => (
+            <Link
+              key={lab.tab}
+              to={lab.to}
+              className="group flex min-h-56 min-w-0 flex-col rounded-lg border border-hairline bg-surface-1 p-5 transition-colors hover:border-hairline-strong hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+            >
+              <span
+                className={`text-[clamp(2.5rem,5vw,4rem)] font-semibold leading-none tracking-[-0.08em] transition-colors ${
+                  index === 1 ? 'text-primary' : 'text-ink-tertiary group-hover:text-primary/70'
+                }`}
+              >
+                {String(index + 1).padStart(2, '0')}
+              </span>
+              <h2 className="mt-auto pt-8 text-[clamp(1.125rem,1.5vw,1.375rem)] font-semibold leading-snug tracking-tight text-ink">
+                {lab.label}
+              </h2>
+              <p className="mt-2 text-body leading-snug text-ink-subtle">{ABOUT[lab.tab]}</p>
+            </Link>
+          ))}
+        </div>
+      </section>
     </Page>
   )
 }

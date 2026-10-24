@@ -1,6 +1,7 @@
 /** Tools: a three-part guide to every tool. */
 
 import { Link } from '@tanstack/react-router'
+import { ArrowUpRightIcon } from 'lucide-react'
 import { TOOL_TABS } from '@/shell/nav'
 import { Page } from '@/ui/kit'
 
@@ -38,8 +39,12 @@ export function ToolsScreen() {
               key={tool.tab}
               to={tool.to}
               search={SEARCH[tool.tab]}
-              className="group flex min-h-56 min-w-0 flex-col rounded-lg border border-hairline bg-surface-1 p-5 transition-colors hover:border-hairline-strong hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+              className="group relative flex min-h-56 min-w-0 flex-col rounded-lg border border-hairline bg-surface-1 p-5 transition-colors hover:border-hairline-strong hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
             >
+              <ArrowUpRightIcon
+                className="absolute top-5 right-5 size-5 text-ink-tertiary transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-ink"
+                aria-hidden
+              />
               <span
                 className={`text-[clamp(2.5rem,5vw,4rem)] font-semibold leading-none tracking-[-0.08em] transition-colors ${
                   index === 0 ? 'text-primary' : 'text-ink-tertiary group-hover:text-primary/70'
@@ -54,6 +59,21 @@ export function ToolsScreen() {
             </Link>
           ))}
         </div>
+        <Link
+          to="/labs"
+          className="group mt-auto flex min-h-24 w-full items-center justify-between gap-6 rounded-lg border border-hairline bg-surface-1 p-5 transition-colors hover:border-hairline-strong hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary md:w-[65%]"
+        >
+          <span>
+            <span className="block text-body-compact font-medium uppercase tracking-[0.14em] text-ink-subtle">
+              Explore more
+            </span>
+            <span className="mt-1 block text-title font-semibold text-ink">Research Labs</span>
+          </span>
+          <ArrowUpRightIcon
+            className="size-5 shrink-0 text-ink-tertiary transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-ink"
+            aria-hidden
+          />
+        </Link>
       </section>
     </Page>
   )

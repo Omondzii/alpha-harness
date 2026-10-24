@@ -61,7 +61,7 @@ export function ToolsScreen() {
         </div>
         <Link
           to="/labs"
-          className="group mt-auto flex min-h-24 w-full items-center justify-between gap-6 rounded-lg border border-hairline bg-surface-1 p-5 transition-colors hover:border-hairline-strong hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary md:w-[65%]"
+          className="group mt-6 flex min-h-24 w-full items-center justify-between gap-6 rounded-lg border border-hairline bg-surface-1 p-5 transition-colors hover:border-hairline-strong hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary md:w-[65%]"
         >
           <span>
             <span className="block text-body-compact font-medium uppercase tracking-[0.14em] text-ink-subtle">

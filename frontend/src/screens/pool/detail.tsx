@@ -108,14 +108,15 @@ function Body({ alphaId }: { alphaId: string }) {
 
   const openInTemplateLab = () => {
     const d = detail.data
+    const alphaInfo = page.data?.alpha
     if (!d) return
     const expression = d.expression ?? ''
     const region = d.settings.region || 'USA'
     const universe = d.settings.universe
     const neutralization = d.settings.neutralization
     const investability: ('none' | 'max_trade' | 'max_position')[] = []
-    if (d.settings.maxTrade === 'ON') investability.push('max_trade')
-    if (d.settings.maxPosition === 'ON') investability.push('max_position')
+    if (alphaInfo?.settings['maxTrade'] === 'ON') investability.push('max_trade')
+    if (alphaInfo?.settings['maxPosition'] === 'ON') investability.push('max_position')
     if (investability.length === 0) investability.push('none')
     setTemplateLab({
       region,

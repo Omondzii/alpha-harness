@@ -52,42 +52,71 @@ export function HubCardBody({
 }
 
 export function ResearchLabsScreen() {
+  const superAlphaIndex = LAB_TABS.findIndex((lab) => lab.tab === 'super-alpha')
+  const superAlphaLab = LAB_TABS[superAlphaIndex]
+
   return (
     <Page className="min-h-full">
       <section className="flex min-h-[calc(100dvh-7rem)] flex-col bg-canvas px-6 py-6 text-ink sm:px-10 sm:py-8 lg:px-14 lg:py-10">
-        <header>
-          <p className="text-body-compact font-medium uppercase tracking-[0.18em] text-ink-subtle">
-            Research Labs
-          </p>
-          <span className="mt-4 block h-px w-8 bg-hairline-strong" aria-hidden />
-          <h1 className="mt-4 max-w-lg text-[clamp(2rem,4vw,3rem)] font-semibold leading-tight tracking-tight text-ink">
-            Choose your lab
-          </h1>
-        </header>
-        <div className="mt-6 grid gap-x-6 gap-y-10 sm:grid-cols-2 xl:grid-cols-5">
-          {LAB_TABS.map((lab, index) => (
+        <header className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-body-compact font-medium uppercase tracking-[0.18em] text-ink-subtle">
+              Research Labs
+            </p>
+            <span className="mt-4 block h-px w-8 bg-hairline-strong" aria-hidden />
+            <h1 className="mt-4 max-w-lg text-[clamp(2rem,4vw,3rem)] font-semibold leading-tight tracking-tight text-ink">
+              Choose your lab
+            </h1>
+          </div>
+          {superAlphaLab && (
             <Link
-              key={lab.tab}
-              to={lab.to}
-              className="group relative flex min-h-56 min-w-0 flex-col rounded-lg border border-hairline bg-surface-1 p-5 transition-colors hover:border-hairline-strong hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+              to={superAlphaLab.to}
+              className="group flex min-h-40 w-full items-center gap-5 rounded-lg border border-hairline bg-surface-1 p-5 transition-colors hover:border-hairline-strong hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary lg:w-[min(38rem,55%)]"
             >
+              <span className="shrink-0 text-[clamp(2.5rem,5vw,4rem)] font-semibold leading-none tracking-[-0.08em] text-ink-tertiary transition-colors group-hover:text-primary/70">
+                {String(superAlphaIndex + 1).padStart(2, '0')}
+              </span>
+              <span className="min-w-0 flex-1">
+                <h2 className="text-[clamp(1.125rem,1.5vw,1.375rem)] font-semibold leading-snug tracking-tight text-ink">
+                  {superAlphaLab.label}
+                </h2>
+                <p className="mt-2 text-body leading-snug text-ink-subtle">
+                  {ABOUT[superAlphaLab.tab]}
+                </p>
+              </span>
               <ArrowUpRightIcon
-                className="absolute top-5 right-5 size-5 text-ink-tertiary transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-ink"
+                className="size-5 shrink-0 text-ink-tertiary transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-ink"
                 aria-hidden
               />
-              <span
-                className={`text-[clamp(2.5rem,5vw,4rem)] font-semibold leading-none tracking-[-0.08em] transition-colors ${
-                  index === 1 ? 'text-primary' : 'text-ink-tertiary group-hover:text-primary/70'
-                }`}
-              >
-                {String(index + 1).padStart(2, '0')}
-              </span>
-              <h2 className="mt-auto pt-8 text-[clamp(1.125rem,1.5vw,1.375rem)] font-semibold leading-snug tracking-tight text-ink">
-                {lab.label}
-              </h2>
-              <p className="mt-2 text-body leading-snug text-ink-subtle">{ABOUT[lab.tab]}</p>
             </Link>
-          ))}
+          )}
+        </header>
+        <div className="mt-6 grid gap-x-6 gap-y-10 sm:grid-cols-2 xl:grid-cols-4">
+          {LAB_TABS.map((lab, index) =>
+            lab.tab === 'super-alpha' ? null : (
+              <Link
+                key={lab.tab}
+                to={lab.to}
+                className="group relative flex min-h-56 min-w-0 flex-col rounded-lg border border-hairline bg-surface-1 p-5 transition-colors hover:border-hairline-strong hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+              >
+                <ArrowUpRightIcon
+                  className="absolute top-5 right-5 size-5 text-ink-tertiary transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-ink"
+                  aria-hidden
+                />
+                <span
+                  className={`text-[clamp(2.5rem,5vw,4rem)] font-semibold leading-none tracking-[-0.08em] transition-colors ${
+                    index === 1 ? 'text-primary' : 'text-ink-tertiary group-hover:text-primary/70'
+                  }`}
+                >
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <h2 className="mt-auto pt-8 text-[clamp(1.125rem,1.5vw,1.375rem)] font-semibold leading-snug tracking-tight text-ink">
+                  {lab.label}
+                </h2>
+                <p className="mt-2 text-body leading-snug text-ink-subtle">{ABOUT[lab.tab]}</p>
+              </Link>
+            ),
+          )}
         </div>
         <Link
           to="/tools"

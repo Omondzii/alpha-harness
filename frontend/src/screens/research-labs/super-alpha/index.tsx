@@ -1,13 +1,16 @@
 /** Super Alpha Lab: SuperAlphas built from your own submitted Alphas, every pairing in one task. */
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { XIcon } from 'lucide-react'
+import { CheckIcon, CopyIcon, PlusIcon, SearchIcon, XIcon } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 import type { components } from '@/api/generated'
 import { http } from '@/api/http'
 import { fmt } from '@/lib/format'
 import { REGION_AGNOSTIC, useScope, useScopeOptions } from '@/lib/scope'
 import { AddTaskButtons, useAddTask } from '@/screens/research-labs/add-task'
+import { templateLab } from '@/screens/research-labs/template/api'
+import { ExpressionCode, TemplateEditor } from '@/screens/research-labs/template/editor'
 import {
   Button,
   Disclosure,
@@ -21,7 +24,6 @@ import {
   PageHeader,
   Panel,
   Segmented,
-  Textarea,
 } from '@/ui/kit'
 import { Select } from '@/ui/overlay'
 import { ScopePicker } from '@/ui/scope-picker'
@@ -39,6 +41,14 @@ const CORES = [1, 2, 3].map((n) => ({ value: n, label: String(n) }))
 const MIN_LIMIT = 10
 const MAX_LIMIT = 200
 const MAX_CUSTOM_RECIPES = 5
+const EXPRESSION_TABS: { value: 'submitted' | 'custom'; label: string }[] = [
+  { value: 'submitted', label: 'Submitted expressions' },
+  { value: 'custom', label: 'Custom expressions' },
+]
+const CUSTOM_EXPRESSION_TYPES: { value: 'selection' | 'combo'; label: string }[] = [
+  { value: 'selection', label: 'Selection' },
+  { value: 'combo', label: 'Combo' },
+]
 
 export function SuperAlphaLabScreen() {
   const [scope, setScope] = useScope('/labs/super-alpha')
@@ -47,12 +57,16 @@ export function SuperAlphaLabScreen() {
   const [limit, setLimit] = useState(30)
   const [activation, setActivation] = useState<NonNullable<Activation>>('BOTH')
   const [cores, setCores] = useState(3)
-  const [selectionName, setSelectionName] = useState('')
   const [selectionCode, setSelectionCode] = useState('')
-  const [comboName, setComboName] = useState('')
   const [comboCode, setComboCode] = useState('')
   const [customSelections, setCustomSelections] = useState<Schemas['Recipe'][]>([])
   const [customCombos, setCustomCombos] = useState<Schemas['Recipe'][]>([])
+  const [expressionTab, setExpressionTab] = useState<'submitted' | 'custom'>('submitted')
+  const [customExpressionType, setCustomExpressionType] = useState<'selection' | 'combo'>(
+    'selection',
+  )
+  const [selectionSearch, setSelectionSearch] = useState('')
+  const [comboSearch, setComboSearch] = useState('')
 
   // BRAIN's own list for the market; Subindustry first where it has one, as most Alphas use it.
   const neutralization = options.neutralizations.some((n) => n.value === picked)
@@ -83,8 +97,24 @@ export function SuperAlphaLabScreen() {
       }),
     placeholderData: keepPreviousData,
   })
+  const submitted = useQuery({
+    queryKey: ['super-lab', 'submitted-expressions'],
+    queryFn: () =>
+      http.get<Schemas['SubmittedExpressions']>('/api/super-lab/submitted-expressions'),
+    enabled: false,
+  })
+  const templateOptions = useQuery({
+    queryKey: ['template-lab', 'options'],
+    queryFn: () => templateLab.options(),
+    staleTime: 5 * 60_000,
+  })
   const add = useAddTask(() => http.post<Schemas['AddedTask']>('/api/super-lab/tasks', body))
-  const ready = !agnostic && limitValid && options.ready && neutralization !== ''
+  const selectionExpressions = submitted.data?.selections ?? []
+  const comboExpressions = submitted.data?.combos ?? []
+  const hasSelection = customSelections.length > 0
+  const hasCombo = customCombos.length > 0
+  const ready =
+    !agnostic && limitValid && options.ready && neutralization !== '' && hasSelection && hasCombo
 
   return (
     <Page>
@@ -98,7 +128,7 @@ export function SuperAlphaLabScreen() {
         title="Market"
         description="Only your submitted ACTIVE Alphas of this region and delay can be selected."
       >
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-end gap-4">
           <ScopePicker scope={scope} onChange={setScope} />
           {agnostic && (
             <Notice
@@ -106,7 +136,7 @@ export function SuperAlphaLabScreen() {
               title="A SuperAlpha combines Alphas of one region. Pick a region other than All Regions."
             />
           )}
-          <Field label="Neutralization" className="max-w-xs">
+          <Field label="Neutralization" className="min-w-56 max-w-xs">
             <Select
               label="Neutralization"
               items={options.neutralizations}
@@ -118,131 +148,189 @@ export function SuperAlphaLabScreen() {
       </Panel>
 
       <Panel
-        title="Custom Expressions"
-        description="Add your own selection scores and combo weights."
+        title="Expressions"
+        actions={
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {expressionTab === 'submitted' && (
+              <Button
+                size="sm"
+                variant="primary"
+                loading={submitted.isFetching}
+                onClick={() => void submitted.refetch()}
+              >
+                {submitted.data ? 'Refresh expressions' : 'Load expressions'}
+              </Button>
+            )}
+            <Segmented
+              label="Expression source"
+              items={EXPRESSION_TABS}
+              value={expressionTab}
+              onChange={setExpressionTab}
+            />
+          </div>
+        }
       >
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="flex min-w-0 flex-col items-start gap-3">
-            <h2 className="text-title">Custom selection</h2>
-            <Field label="Name" className="w-full">
-              <Input
-                value={selectionName}
-                maxLength={80}
-                placeholder={`Custom selection ${customSelections.length + 1}`}
-                onChange={(e) => setSelectionName(e.target.value)}
-              />
-            </Field>
-            <Field
-              label="Scoring expression"
-              hint="Scores are clamped to zero or above; the operator-count cap is added automatically."
-              className="w-full"
-            >
-              <Textarea
-                rows={3}
-                maxLength={2000}
-                value={selectionCode}
-                onChange={(e) => setSelectionCode(e.target.value)}
-                placeholder="(1 - self_correlation) * (1 - prod_correlation)"
-                className="num"
-              />
-            </Field>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={!selectionCode.trim() || customSelections.length >= MAX_CUSTOM_RECIPES}
-              onClick={() => {
-                setCustomSelections((current) => [
-                  ...current,
-                  {
-                    name: selectionName.trim() || `Custom selection ${current.length + 1}`,
-                    code: selectionCode.trim(),
-                  },
-                ])
-                setSelectionName('')
-                setSelectionCode('')
-              }}
-            >
-              Add selection
-            </Button>
-            {customSelections.length >= MAX_CUSTOM_RECIPES && (
-              <span className="text-caption text-ink-subtle">
-                Maximum {MAX_CUSTOM_RECIPES} custom selections.
-              </span>
-            )}
-            <CustomRecipes
-              label="Added selections"
-              recipes={customSelections}
-              onRemove={(index) =>
-                setCustomSelections((current) => current.filter((_, i) => i !== index))
+        <div className={expressionTab === 'submitted' ? 'contents' : 'hidden'}>
+          {submitted.isError && (
+            <ErrorNotice error={submitted.error} title="Could not load submitted expressions" />
+          )}
+          {submitted.data && (
+            <div className="flex flex-col gap-4">
+              {submitted.data.omitted > 0 && (
+                <Notice
+                  tone="info"
+                  title={`${submitted.data.omitted} submitted expression${submitted.data.omitted === 1 ? '' : 's'} exceeded the 2,000-character limit and could not be imported.`}
+                />
+              )}
+              {submitted.data.truncated && (
+                <Notice
+                  tone="info"
+                  title="Only the newest submitted SuperAlphas were loaded because BRAIN limits how far this list can be paged."
+                />
+              )}
+              {submitted.data.selections.length === 0 && submitted.data.combos.length === 0 && (
+                <Notice
+                  tone="info"
+                  title="No submitted SuperAlpha selection or combo expressions were found."
+                />
+              )}
+            </div>
+          )}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <ExpressionCatalog
+              title="Selection expressions"
+              recipes={selectionExpressions}
+              search={selectionSearch}
+              onSearch={setSelectionSearch}
+              added={customSelections}
+              onAdd={(recipe) =>
+                setCustomSelections((current) =>
+                  current.some((item) => item.code === recipe.code) ||
+                  current.length >= MAX_CUSTOM_RECIPES
+                    ? current
+                    : [...current, { name: recipe.name, code: recipe.code }],
+                )
               }
             />
-          </section>
-
+            <ExpressionCatalog
+              title="Combo expressions"
+              recipes={comboExpressions}
+              search={comboSearch}
+              onSearch={setComboSearch}
+              added={customCombos}
+              onAdd={(recipe) =>
+                setCustomCombos((current) =>
+                  current.some((item) => item.code === recipe.code) ||
+                  current.length >= MAX_CUSTOM_RECIPES
+                    ? current
+                    : [...current, { name: recipe.name, code: recipe.code }],
+                )
+              }
+            />
+          </div>
+        </div>
+        <div className={expressionTab === 'custom' ? 'contents' : 'hidden'}>
           <section className="flex min-w-0 flex-col items-start gap-3">
-            <h2 className="text-title">Custom combo</h2>
-            <Field label="Name" className="w-full">
-              <Input
-                value={comboName}
-                maxLength={80}
-                placeholder={`Custom combo ${customCombos.length + 1}`}
-                onChange={(e) => setComboName(e.target.value)}
+            <Segmented
+              label="Custom expression type"
+              items={CUSTOM_EXPRESSION_TYPES}
+              value={customExpressionType}
+              onChange={setCustomExpressionType}
+            />
+            {templateOptions.isError && (
+              <ErrorNotice
+                error={templateOptions.error}
+                title="Could not load operators; operator names cannot be checked"
               />
-            </Field>
-            <Field label="Weight expression" className="w-full">
-              <Textarea
-                rows={3}
+            )}
+            <div className="w-full">
+              <TemplateEditor
+                value={customExpressionType === 'selection' ? selectionCode : comboCode}
+                label={`${customExpressionType === 'selection' ? 'Selection' : 'Combo'} expression`}
                 maxLength={2000}
-                value={comboCode}
-                onChange={(e) => setComboCode(e.target.value)}
-                placeholder={
-                  'stats = generate_stats(alpha);\n1 / (ts_std_dev(stats.returns, 120) + 0.0001)'
+                onChange={(value) => {
+                  if (customExpressionType === 'selection') {
+                    setSelectionCode(value)
+                  } else {
+                    setComboCode(value)
+                  }
+                }}
+                reference={templateOptions.data?.reference ?? []}
+                presets={{}}
+                variables={{}}
+                infos={new Map()}
+                problems={[]}
+                scope={scope}
+              />
+            </div>
+            <Button
+              size="md"
+              variant="primary"
+              className="mt-1"
+              disabled={
+                !(customExpressionType === 'selection' ? selectionCode : comboCode).trim() ||
+                (customExpressionType === 'selection'
+                  ? customSelections.length
+                  : customCombos.length) >= MAX_CUSTOM_RECIPES
+              }
+              onClick={() => {
+                if (customExpressionType === 'selection') {
+                  setCustomSelections((current) => [
+                    ...current,
+                    {
+                      name: `Selection ${current.length + 1}`,
+                      code: selectionCode.trim(),
+                    },
+                  ])
+                  setSelectionCode('')
+                } else {
+                  setCustomCombos((current) => [
+                    ...current,
+                    {
+                      name: `Combo ${current.length + 1}`,
+                      code: comboCode.trim(),
+                    },
+                  ])
+                  setComboCode('')
                 }
-                className="num"
-              />
-            </Field>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={!comboCode.trim() || customCombos.length >= MAX_CUSTOM_RECIPES}
-              onClick={() => {
-                setCustomCombos((current) => [
-                  ...current,
-                  {
-                    name: comboName.trim() || `Custom combo ${current.length + 1}`,
-                    code: comboCode.trim(),
-                  },
-                ])
-                setComboName('')
-                setComboCode('')
               }}
             >
-              Add combo
+              Add {customExpressionType}
             </Button>
-            {customCombos.length >= MAX_CUSTOM_RECIPES && (
-              <span className="text-caption text-ink-subtle">
-                Maximum {MAX_CUSTOM_RECIPES} custom combos.
-              </span>
+            {customExpressionType === 'selection' ? (
+              <CustomRecipes
+                recipes={customSelections}
+                onRemove={(index) =>
+                  setCustomSelections((current) => current.filter((_, i) => i !== index))
+                }
+              />
+            ) : (
+              <CustomRecipes
+                recipes={customCombos}
+                onRemove={(index) =>
+                  setCustomCombos((current) => current.filter((_, i) => i !== index))
+                }
+              />
             )}
-            <CustomRecipes
-              label="Added combos"
-              recipes={customCombos}
-              onRemove={(index) =>
-                setCustomCombos((current) => current.filter((_, i) => i !== index))
-              }
-            />
           </section>
         </div>
+        {!hasSelection || !hasCombo ? (
+          <Notice
+            tone="error"
+            title="Add at least one selection expression and one combo expression to create a task."
+          />
+        ) : null}
       </Panel>
 
       <Panel
         title="Settings"
         description="Selection Handling is Positive: an Alpha a selection scores zero is left out."
       >
-        <div className="flex flex-wrap items-end gap-6">
-          <Field
-            label="Selection Limit"
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <Fieldset
+            legend="Selection Limit"
             hint={`Alphas kept from the top of each ranking, ${MIN_LIMIT} to ${MAX_LIMIT}.`}
-            className="w-48"
+            className="rounded-sm border border-hairline bg-surface-2 p-3"
           >
             <Input
               type="number"
@@ -250,10 +338,13 @@ export function SuperAlphaLabScreen() {
               max={MAX_LIMIT}
               value={Number.isNaN(limit) ? '' : String(limit)}
               onChange={(e) => setLimit(e.target.valueAsNumber)}
-              className="num"
+              className="w-full num"
             />
-          </Field>
-          <Fieldset legend="Component Activation">
+          </Fieldset>
+          <Fieldset
+            legend="Component Activation"
+            className="rounded-sm border border-hairline bg-surface-2 p-3"
+          >
             <Segmented
               label="Component Activation"
               items={ACTIVATIONS}
@@ -261,7 +352,7 @@ export function SuperAlphaLabScreen() {
               onChange={setActivation}
             />
           </Fieldset>
-          <Fieldset legend="Cores">
+          <Fieldset legend="Cores" className="rounded-sm border border-hairline bg-surface-2 p-3">
             <Segmented label="Cores" items={CORES} value={cores} onChange={setCores} />
           </Fieldset>
         </div>
@@ -276,7 +367,7 @@ export function SuperAlphaLabScreen() {
 
       <Panel
         title="What Runs"
-        description="Every selection with every combo, at two Decays to land Turnover between 2% and 40%. Each runs in Full mode, so BRAIN's own checks say which are submittable: those show green in Tasks and reach the Submission Planner."
+        description="Every selected expression with every selected combo runs at two Decays to land Turnover between 2% and 40%. Each runs in Full mode, so BRAIN's own checks say which are submittable: those show green in Tasks and reach the Submission Planner."
       >
         {plan.isError && <ErrorNotice error={plan.error} title="Could not plan the task" />}
         {plan.data && (
@@ -290,12 +381,14 @@ export function SuperAlphaLabScreen() {
               />
               <Metric boxed label="Truncation" value={String(plan.data.truncation)} />
             </div>
-            <Disclosure summary={`Selections (${plan.data.selections.length})`}>
-              <Recipes recipes={plan.data.selections} />
-            </Disclosure>
-            <Disclosure summary={`Combos (${plan.data.combos.length})`}>
-              <Recipes recipes={plan.data.combos} />
-            </Disclosure>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Disclosure summary={`Selections (${plan.data.selections.length})`}>
+                <Recipes recipes={plan.data.selections} />
+              </Disclosure>
+              <Disclosure summary={`Combos (${plan.data.combos.length})`}>
+                <Recipes recipes={plan.data.combos} />
+              </Disclosure>
+            </div>
             <Notice
               tone="info"
               title="Each selection caps an Alpha's operators at 8,000 divided by the Selection Limit, so the selected Alphas never pass BRAIN's 8,000-operator ceiling. Submitting stays on BRAIN, with a description of the selection and the combo."
@@ -307,36 +400,137 @@ export function SuperAlphaLabScreen() {
   )
 }
 
+function ExpressionCatalog({
+  title,
+  recipes,
+  search,
+  onSearch,
+  added,
+  onAdd,
+}: {
+  title: string
+  recipes: Schemas['SubmittedExpression'][]
+  search: string
+  onSearch: (value: string) => void
+  added: Schemas['Recipe'][]
+  onAdd: (recipe: Schemas['SubmittedExpression']) => void
+}) {
+  const query = search.trim().toLocaleLowerCase()
+  const matching = recipes.filter((recipe) =>
+    [recipe.code, ...recipe.sources].some((value) => value.toLocaleLowerCase().includes(query)),
+  )
+
+  return (
+    <section className="flex min-w-0 flex-col gap-3">
+      <h3 className="text-title">{title}</h3>
+      <div className="relative w-full">
+        <SearchIcon
+          className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-subtle"
+          aria-hidden
+        />
+        <Input
+          type="search"
+          value={search}
+          onChange={(event) => onSearch(event.target.value)}
+          placeholder={`Search ${title.toLocaleLowerCase()} or source Alpha`}
+          aria-label={`Search ${title.toLocaleLowerCase()} or source Alpha`}
+          className="w-full pl-9"
+          disabled={recipes.length === 0}
+        />
+      </div>
+      <div className="flex max-h-[15rem] min-h-24 flex-col gap-2 overflow-y-auto pr-1">
+        {recipes.length === 0 ? (
+          <p className="py-3 text-body-compact text-ink-subtle">No expressions available.</p>
+        ) : matching.length === 0 ? (
+          <p className="py-3 text-body-compact text-ink-subtle">
+            No expressions match this search.
+          </p>
+        ) : (
+          matching.map((recipe) => {
+            const isAdded = added.some((item) => item.code === recipe.code)
+            const canAdd = added.length < MAX_CUSTOM_RECIPES
+            const source = recipe.sources[0]?.split(' · ').at(-1)
+            const copy = async () => {
+              const value = source ? `${recipe.code}\n// AlphaID: ${source}` : recipe.code
+              try {
+                await navigator.clipboard.writeText(value)
+                toast.success(source ? 'Copied expression and Alpha ID' : 'Copied expression')
+              } catch {
+                toast.error('Could not copy to clipboard')
+              }
+            }
+            return (
+              <article
+                key={recipe.code}
+                className="flex min-w-0 items-center gap-3 rounded-md border border-hairline bg-surface-2/50 p-2.5 transition-colors hover:bg-surface-2"
+              >
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <ExpressionCode value={recipe.code} />
+                  {source && (
+                    <code className="num break-all text-caption text-ink-subtle">{source}</code>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    className="bg-surface-3/70 text-ink-subtle transition-all duration-150 hover:-translate-y-0.5 hover:bg-primary-subtle hover:text-ink active:translate-y-0 active:scale-95"
+                    aria-label="Copy expression and Alpha ID"
+                    title="Copy expression and Alpha ID"
+                    onClick={() => void copy()}
+                  >
+                    <CopyIcon />
+                  </Button>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    className={`bg-surface-3/70 transition-all duration-150 hover:-translate-y-0.5 hover:bg-primary-subtle hover:text-ink active:translate-y-0 active:scale-95 ${isAdded ? 'text-pnl-positive-text' : 'text-ink-subtle'}`}
+                    disabled={!isAdded && !canAdd}
+                    aria-label={isAdded ? 'Expression added' : 'Add expression'}
+                    title={isAdded ? 'Expression added' : 'Add expression'}
+                    onClick={() => onAdd(recipe)}
+                  >
+                    {isAdded ? <CheckIcon /> : <PlusIcon />}
+                  </Button>
+                </div>
+              </article>
+            )
+          })
+        )}
+      </div>
+      {recipes.length > 0 && (
+        <span className="text-caption text-ink-subtle">
+          {fmt.int(matching.length)} of {fmt.int(recipes.length)} unique expressions
+        </span>
+      )}
+    </section>
+  )
+}
+
 function CustomRecipes({
-  label,
   recipes,
   onRemove,
 }: {
-  label: string
   recipes: Schemas['Recipe'][]
   onRemove: (index: number) => void
 }) {
   if (recipes.length === 0) return null
   return (
     <section className="w-full border-t border-hairline pt-3">
-      <h3 className="mb-2 text-caption font-medium text-ink-subtle">{label}</h3>
-      <ul className="flex flex-col">
+      <ul className="flex flex-col divide-y divide-hairline-subtle">
         {recipes.map((recipe, index) => (
           <li
             key={`${recipe.code}-${index}`}
-            className="flex items-start justify-between gap-3 border-b border-hairline-subtle py-2 last:border-b-0"
+            className="flex items-start justify-between gap-3 py-2"
           >
-            <div className="flex min-w-0 flex-col gap-1">
-              <span className="text-body-compact font-medium text-ink">{recipe.name}</span>
-              <code className="num whitespace-pre-wrap break-all text-caption text-ink-muted">
-                {recipe.code}
-              </code>
-            </div>
+            <code className="num min-w-0 whitespace-pre-wrap break-all text-caption text-ink-muted">
+              {recipe.code}
+            </code>
             <Button
               size="icon-sm"
               variant="ghost"
-              aria-label={`Remove ${recipe.name}`}
-              title={`Remove ${recipe.name}`}
+              aria-label="Remove expression"
+              title="Remove expression"
               onClick={() => onRemove(index)}
             >
               <XIcon />

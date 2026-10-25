@@ -16,6 +16,7 @@ working when the venv it manages does not.
 """
 
 import ctypes
+import hashlib
 import json
 import os
 import re
@@ -39,6 +40,21 @@ REPOSITORY = os.environ.get(REPOSITORY_VARIABLE) or "residual-lab/alpha-harness"
 DOWNLOAD = f"https://github.com/{REPOSITORY}/releases/download"
 
 HOME_VARIABLE = "ALPHA_HARNESS_HOME"
+DATA_DIR_VARIABLE = "ALPHA_HARNESS_DATA_DIR"
+PORT_VARIABLE = "ALPHA_HARNESS_PORT"
+PROFILE_VARIABLE = "ALPHA_HARNESS_PROFILE"
+PROFILE_NAME = os.environ.get(PROFILE_VARIABLE)
+if PROFILE_NAME is not None and not re.fullmatch(
+    r"[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?", PROFILE_NAME
+):
+    raise ValueError(
+        f"{PROFILE_VARIABLE} must be a lowercase name with only letters, numbers, "
+        "and internal hyphens (up to 32 characters)"
+    )
+NUMBERED_PROFILE = re.fullmatch(r"acc([1-9][0-9]*)", PROFILE_NAME or "")
+PROFILE_NUMBER = int(NUMBERED_PROFILE.group(1)) if NUMBERED_PROFILE else None
+if PROFILE_NUMBER is not None and PROFILE_NUMBER > 57535:
+    raise ValueError(f"{PROFILE_VARIABLE} must be between acc1 and acc57535")
 #: The exe's own version, handed to the app. The in-app update replaces the wheel and never
 #: this program, so without it the app cannot tell that the exe around it is years older.
 LAUNCHER_VARIABLE = "ALPHA_HARNESS_LAUNCHER"
@@ -53,7 +69,19 @@ ACTIVE_FILE = "active-slot.txt"
 LOCK_FILE = "running.lock"
 LOG_FILE = "launcher.log"
 #: Where the app serves; kept in step with ``alpha_harness.__main__``.
-APP_PORT = 8000
+try:
+    if PROFILE_NAME is None:
+        default_port = 8000
+    elif PROFILE_NUMBER is not None:
+        default_port = 8000 + PROFILE_NUMBER
+    else:
+        slot = int.from_bytes(hashlib.sha256(PROFILE_NAME.encode()).digest()[:4], "big") % 20_000
+        default_port = 10_000 + slot
+    APP_PORT = int(os.environ.get(PORT_VARIABLE, str(default_port)))
+except ValueError as exc:
+    raise ValueError(f"{PORT_VARIABLE} must be an integer from 1 to 65535") from exc
+if not 1 <= APP_PORT <= 65535:
+    raise ValueError(f"{PORT_VARIABLE} must be an integer from 1 to 65535")
 
 WINDOWS = sys.platform == "win32"
 MACOS = sys.platform == "darwin"
@@ -81,14 +109,18 @@ def home() -> Path:
     """Where everything the launcher owns lives. Per-user, so updating needs no elevation."""
     override = os.environ.get(HOME_VARIABLE)
     if override:
-        return Path(override)
-    if WINDOWS:
+        base = Path(override)
+    elif WINDOWS:
         base = os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local"
     elif MACOS:
         base = Path.home() / "Library" / "Application Support"
     else:
         base = os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share"
-    return Path(base) / "AlphaHarness"
+    if not override:
+        base = Path(base) / "AlphaHarness"
+    # A launcher owns a venv and update slots, so separate ports need separate launcher state
+    # as well as separate app data. The default profile keeps its existing location.
+    return base if APP_PORT == 8000 else base / "profiles" / str(APP_PORT)
 
 
 def say(root: Path, message: str) -> None:
@@ -862,6 +894,13 @@ def start(root: Path, slot: str) -> int:
         PID_VARIABLE: str(os.getpid()),
         "PYTHONUTF8": "1",
     }
+    if DATA_DIR_VARIABLE not in environment:
+        data_dir = Path.home() / ".alpha-harness"
+        if PROFILE_NAME is not None:
+            # Keep the original launcher data path for numbered profiles; named profiles
+            # use a readable directory matching ALPHA_HARNESS_PROFILE.
+            data_dir /= f"profile-{APP_PORT}" if PROFILE_NUMBER is not None else PROFILE_NAME
+        environment[DATA_DIR_VARIABLE] = str(data_dir)
     say(root, f"starting app from slot {slot}")
     with (root / LOG_FILE).open("a", encoding="utf-8") as handle:
         _child = subprocess.Popen(  # noqa: S603 - the venv this launcher built

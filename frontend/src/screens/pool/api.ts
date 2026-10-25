@@ -1,7 +1,6 @@
 /**
  * Alphas (spec §4.5): the local store of Alphas, their submission checks and correlations.
- * Request bodies are snake_case ONLY — camelCase keys are silently dropped — and nothing here
- * submits an alpha.
+ * Request bodies are snake_case ONLY — camelCase keys are silently dropped.
  */
 
 import { queryOptions } from '@tanstack/react-query'
@@ -99,5 +98,10 @@ export const pool = {
   check: (alphaId: string) =>
     http.get<{ is?: { checks?: AlphaCheck[] } }>(
       `/api/alphas/${encodeURIComponent(alphaId)}/check`,
+    ),
+  /** Submit one Alpha after explicit confirmation. BRAIN must accept it for this to succeed. */
+  submit: (alphaId: string) =>
+    http.post<{ alpha_id: string; accepted: boolean }>(
+      `/api/alphas/${encodeURIComponent(alphaId)}/submit`,
     ),
 }

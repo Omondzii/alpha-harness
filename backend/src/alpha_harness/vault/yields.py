@@ -331,7 +331,7 @@ FIXABLE_CHECKS = frozenset(
     }
 )
 
-#: Where an alpha lives on the platform. The consultant submits it there, never here.
+#: Where an alpha lives on the platform; submission requests are sent to BRAIN's API.
 #:
 #: Singular. ``/alphas/:id`` in the router's table is the *list* and its ``:id`` is a tab --
 #: ``/alphas/unsubmitted``, ``/alphas/lists`` -- not an Alpha. A "does not exist or belongs to

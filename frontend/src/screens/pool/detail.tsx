@@ -13,6 +13,7 @@ import { alpha, notApplicable } from '@/screens/alpha/api'
 import { PropertiesPanel } from '@/screens/alpha/properties'
 import { type AlphaSettings, pool } from '@/screens/pool/api'
 import { PnlChart } from '@/screens/pool/pnl-chart'
+import { useTemplateLab } from '@/screens/research-labs/template/state'
 import {
   Badge,
   Button,
@@ -26,8 +27,14 @@ import {
   Skeleton,
 } from '@/ui/kit'
 import { Sheet } from '@/ui/overlay'
-import { AlphaActionsMenu, AstInspector, checkFigure, OpenInBrain, RecheckButton } from './shared'
-import { useTemplateLab } from '@/screens/research-labs/template/state'
+import {
+  AlphaActionsMenu,
+  AstInspector,
+  checkFigure,
+  OpenInBrain,
+  RecheckButton,
+  SubmitAlphaButton,
+} from './shared'
 
 type Kind = 'self' | 'prod'
 const KIND_LABEL: Record<Kind, string> = {
@@ -166,6 +173,7 @@ function Body({ alphaId }: { alphaId: string }) {
           <Button size="sm" variant="secondary" onClick={openInTemplateLab}>
             Open in Template Lab
           </Button>
+          <SubmitAlphaButton alphaId={d.alphaId} disabled />
           <OpenInBrain url={d.brainUrl} />
           <RecheckButton alphaId={d.alphaId} />
           <AlphaActionsMenu alphaId={d.alphaId} />
@@ -247,6 +255,12 @@ function Body({ alphaId }: { alphaId: string }) {
         <Button size="sm" variant="secondary" onClick={openInTemplateLab}>
           Open in Template Lab
         </Button>
+        <SubmitAlphaButton
+          alphaId={d.alphaId}
+          disabled={
+            alphaInfo?.status !== 'UNSUBMITTED' || alphaInfo.settings['simulationMode'] === 'QUICK'
+          }
+        />
         <OpenInBrain url={d.brainUrl} />
         <RecheckButton alphaId={d.alphaId} />
         <AlphaActionsMenu alphaId={d.alphaId} />

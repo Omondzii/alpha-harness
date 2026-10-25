@@ -168,6 +168,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/alphas/{alpha_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Alpha
+         * @description Submit one currently unsubmitted, full-mode Alpha to BRAIN.
+         *
+         *     The platform is authoritative about its checks. The fresh read here prevents submitting
+         *     something already submitted or a Quick-mode Alpha; the POST itself is deliberately never
+         *     retried because its outcome may be irreversible.
+         */
+        post: operations["submit_alpha_api_alphas__alpha_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -951,7 +975,7 @@ export interface paths {
         head?: never;
         /**
          * Change
-         * @description Change a task's cores or simulations. A running task takes them from its next round.
+         * @description Change a task's cores or simulations. Completed Template tasks can be extended.
          */
         patch: operations["change_api_lab_tasks__task_id__patch"];
         trace?: never;
@@ -1575,6 +1599,26 @@ export interface paths {
          * @description What a task with these settings would run, without running anything.
          */
         post: operations["plan_api_super_lab_plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/super-lab/submitted-expressions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Submitted Expressions
+         * @description Read selection and combo recipes from the user's submitted SuperAlphas.
+         */
+        get: operations["submitted_expressions_api_super_lab_submitted_expressions_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2271,6 +2315,8 @@ export interface components {
              * @default 0
              */
             offset: number;
+            /** Pyramids */
+            pyramids?: string[] | null;
             /** Regions */
             regions?: string[] | null;
             /** Search */
@@ -4727,6 +4773,13 @@ export interface components {
             /** Name */
             name: string | null;
         };
+        /** SubmissionAccepted */
+        SubmissionAccepted: {
+            /** Accepted */
+            accepted: boolean;
+            /** Alphaid */
+            alphaId: string;
+        };
         /** SubmittableAlpha */
         SubmittableAlpha: {
             /** Alphaid */
@@ -4796,6 +4849,28 @@ export interface components {
             total: number;
             /** Unvalidated */
             unvalidated: number;
+        };
+        /** SubmittedExpression */
+        SubmittedExpression: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Sources */
+            sources: string[];
+            /** Usedby */
+            usedBy: number;
+        };
+        /** SubmittedExpressions */
+        SubmittedExpressions: {
+            /** Combos */
+            combos: components["schemas"]["SubmittedExpression"][];
+            /** Omitted */
+            omitted: number;
+            /** Selections */
+            selections: components["schemas"]["SubmittedExpression"][];
+            /** Truncated */
+            truncated: boolean;
         };
         /** SubmittedRequest */
         SubmittedRequest: {
@@ -5761,6 +5836,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrainPayload"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_alpha_api_alphas__alpha_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alpha_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionAccepted"];
                 };
             };
             /** @description Validation Error */
@@ -7870,6 +7976,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submitted_expressions_api_super_lab_submitted_expressions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmittedExpressions"];
                 };
             };
         };

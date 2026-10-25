@@ -10,10 +10,10 @@ from typing import Any
 import uvicorn
 
 from . import updates
+from .config import PORT
 from .window import open_window
 
 HOST = "127.0.0.1"
-PORT = 8000
 #: A port another program holds: POSIX's number, and Windows' own (WSAEADDRINUSE).
 PORT_TAKEN = frozenset({errno.EADDRINUSE, 10048})
 #: How long a start straight after an update waits for the page that asked for it to return.

@@ -1,4 +1,4 @@
-/** Name, category, colour, tags and description, saved to the Alpha on BRAIN. Saving never submits. */
+/** Name, category, colour, tags and description, saved to the Alpha on BRAIN. Saving never submits it. */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'

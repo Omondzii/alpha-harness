@@ -1,10 +1,14 @@
 """Super Alpha Lab: one form, one task of SuperAlphas from your own submitted Alphas."""
 
+import asyncio
 from typing import Literal
 
 from fastapi import APIRouter
 from pydantic import Field
 
+from ..brain.endpoints import BrainEndpoints
+from ..brain.filters import AlphaQuery, Filter
+from ..brain.schemas import Alpha, SimulationType
 from ..db.models import utcnow
 from ..engine.packer import MAX_BATCH
 from ..labs import super_alpha
@@ -18,6 +22,8 @@ router = APIRouter(prefix="/api/super-lab", tags=["super-lab"])
 #: BRAIN runs at most three SuperAlpha simulations per person at once.
 MAX_CORES = 3
 MAX_CUSTOM_RECIPES = 5
+ALPHA_PAGE_SIZE = 100
+MAX_ALPHA_OFFSET = 1_000
 
 
 class Recipe(Out):
@@ -47,13 +53,121 @@ class SuperPlan(Out):
     simulations: int
 
 
+class SubmittedExpression(Out):
+    name: str
+    code: str
+    used_by: int
+    sources: list[str]
+
+
+class SubmittedExpressions(Out):
+    selections: list[SubmittedExpression]
+    combos: list[SubmittedExpression]
+    truncated: bool
+    omitted: int
+
+
+def _recipe_name(name: str | None, alpha_id: str, expression_type: str) -> str:
+    label = (name or "Submitted SuperAlpha").strip()[:40]
+    return f"{label} · {alpha_id[-10:]} · {expression_type}"
+
+
+async def _submitted_expressions(endpoints: BrainEndpoints) -> SubmittedExpressions:
+    selections: dict[str, tuple[str, int, list[str]]] = {}
+    combos: dict[str, tuple[str, int, list[str]]] = {}
+    offset = 0
+    truncated = False
+    omitted = 0
+    semaphore = asyncio.Semaphore(4)
+
+    while True:
+        page = await endpoints.list_alphas(
+            AlphaQuery(
+                limit=ALPHA_PAGE_SIZE,
+                offset=offset,
+                order="-dateSubmitted",
+                filters=[
+                    Filter("status", "!=", "UNSUBMITTED"),
+                    Filter("type", "=", "SUPER"),
+                ],
+                hidden=None,
+            )
+        )
+        results = page["results"]
+        total = page["count"]
+        candidates = [Alpha.model_validate(row) for row in results]
+        candidates = [alpha for alpha in candidates if alpha.type == SimulationType.SUPER]
+
+        async def complete(alpha: Alpha) -> Alpha:
+            if alpha.selection and alpha.selection.code and alpha.combo and alpha.combo.code:
+                return alpha
+            async with semaphore:
+                return await endpoints.get_alpha(alpha.id)
+
+        full_alphas = await asyncio.gather(*(complete(alpha) for alpha in candidates))
+        for alpha in full_alphas:
+            source = alpha.id
+            if alpha.selection and (code := alpha.selection.code):
+                if len(code) <= 2000:
+                    name, count, sources = selections.get(
+                        code,
+                        (_recipe_name(alpha.name, alpha.id, "selection"), 0, []),
+                    )
+                    selections[code] = (
+                        name,
+                        count + 1,
+                        sources or [source],
+                    )
+                else:
+                    omitted += 1
+            if alpha.combo and (code := alpha.combo.code):
+                if len(code) <= 2000:
+                    name, count, sources = combos.get(
+                        code,
+                        (_recipe_name(alpha.name, alpha.id, "combo"), 0, []),
+                    )
+                    combos[code] = (
+                        name,
+                        count + 1,
+                        sources or [source],
+                    )
+                else:
+                    omitted += 1
+
+        if len(results) < ALPHA_PAGE_SIZE or offset + len(results) >= total:
+            break
+        if offset >= MAX_ALPHA_OFFSET:
+            truncated = True
+            break
+        offset += ALPHA_PAGE_SIZE
+
+    return SubmittedExpressions(
+        selections=[
+            SubmittedExpression(name=name, code=code, used_by=count, sources=sources)
+            for code, (name, count, sources) in selections.items()
+        ],
+        combos=[
+            SubmittedExpression(name=name, code=code, used_by=count, sources=sources)
+            for code, (name, count, sources) in combos.items()
+        ],
+        truncated=truncated,
+        omitted=omitted,
+    )
+
+
+@router.get("/submitted-expressions")
+async def submitted_expressions(state: State) -> SubmittedExpressions:
+    """Read selection and combo recipes from the user's submitted SuperAlphas."""
+    return await _submitted_expressions(state.endpoints)
+
+
 def _activations(choice: str) -> list[str]:
     return ["IS", "OS"] if choice == "BOTH" else [choice]
 
 
 def _recipes(body: SuperTask) -> tuple[list[super_alpha.Recipe], list[super_alpha.Recipe]]:
-    selections = super_alpha.selections(body.selection_limit)
-    combos = list(super_alpha.COMBOS)
+    selections: list[super_alpha.Recipe] = []
+    combos: list[super_alpha.Recipe] = []
     cap = super_alpha.OPERATOR_LIMIT // body.selection_limit
     for index, recipe in enumerate(body.custom_selections, 1):
         selections.append(
@@ -89,6 +203,12 @@ async def add_task(body: SuperTask, state: State) -> AddedTask:
     if body.region == "ALL":
         raise refuse(422, "region_agnostic", "SuperAlphas combine Alphas of one region.")
     selections, combos = _recipes(body)
+    if not selections or not combos:
+        raise refuse(
+            422,
+            "expressions_required",
+            "Choose at least one selection expression and one combo expression.",
+        )
     found = super_alpha.candidates(
         region=body.region,
         delay=body.delay,
@@ -96,8 +216,8 @@ async def add_task(body: SuperTask, state: State) -> AddedTask:
         neutralization=body.neutralization,
         selection_limit=body.selection_limit,
         activations=_activations(body.activation),
-        extra_selections=selections[len(super_alpha.selections(body.selection_limit)) :],
-        extra_combos=combos[len(super_alpha.COMBOS) :],
+        selection_recipes=selections,
+        combo_recipes=combos,
     )
     return await add_study(
         state,
@@ -115,7 +235,7 @@ async def add_task(body: SuperTask, state: State) -> AddedTask:
         ),
         simulations=len(found),
         batch_size=body.cores * MAX_BATCH,
-        template_source=super_alpha.COMBOS[0].code,
+        template_source=combos[0].code,
         template_name=f"Super Alpha Lab · {body.region} D{body.delay} {body.universe}",
         run=body.run,
         seeds=super_alpha.seed_trials(found),

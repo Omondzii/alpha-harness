@@ -1,28 +1,90 @@
-/** Pieces the Alpha detail and Submittable tabs share: the expression, check figures, the BRAIN link, re-check. */
+/** Pieces the Alpha detail and Submittable tabs share: expression, checks, BRAIN actions. */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { CheckIcon, CopyIcon, EllipsisIcon, ExternalLinkIcon, RefreshCwIcon } from 'lucide-react'
+import {
+  CheckIcon,
+  CopyIcon,
+  EllipsisIcon,
+  ExternalLinkIcon,
+  RefreshCwIcon,
+  SendIcon,
+} from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { errorMessage } from '@/api/http'
 import { cn } from '@/lib/cn'
 import { fmt } from '@/lib/format'
 import { pool } from '@/screens/pool/api'
 import { Button } from '@/ui/kit'
-import { Menu } from '@/ui/overlay'
+import { Confirm, Menu } from '@/ui/overlay'
 import { type AstKind, tokenizeBrainAst } from './brain-ast'
 
 /** A check's value or limit: turnover as a percentage, the rest as a ratio. */
 export const checkFigure = (name: string, v: number | null | undefined) =>
   name.includes('TURNOVER') ? fmt.pct(v) : fmt.ratio(v)
 
-/** The strict submission boundary: submission happens on BRAIN, never here. */
+/** Open the platform page for this Alpha. */
 export function OpenInBrain({ url }: { url: string }) {
   return (
     <Button size="sm" render={<a href={url} target="_blank" rel="noopener noreferrer" />}>
       <ExternalLinkIcon aria-hidden />
       Open in BRAIN
     </Button>
+  )
+}
+
+/** Submits only after an explicit confirmation; BRAIN's submission cannot be undone. */
+export function SubmitAlphaButton({
+  alphaId,
+  disabled = false,
+}: {
+  alphaId: string
+  disabled?: boolean
+}) {
+  const queryClient = useQueryClient()
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const mutation = useMutation({
+    mutationFn: () => pool.submit(alphaId),
+    onSuccess: () => {
+      setConfirmOpen(false)
+      toast.success(`BRAIN submitted ${alphaId}`)
+      void queryClient.invalidateQueries({ queryKey: ['pool'] })
+      void queryClient.invalidateQueries({ queryKey: ['alpha', alphaId] })
+      void queryClient.invalidateQueries({ queryKey: ['submittable-alphas'] })
+      void queryClient.invalidateQueries({ queryKey: ['portfolio'] })
+      void queryClient.invalidateQueries({ queryKey: ['lab-tasks'] })
+    },
+    onError: (error) => {
+      setConfirmOpen(false)
+      toast.error(`Could not submit ${alphaId}`, { description: errorMessage(error) })
+    },
+  })
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="primary"
+        disabled={disabled}
+        title={disabled ? 'Only unsubmitted, full-mode Alphas can be submitted' : undefined}
+        onClick={() => setConfirmOpen(true)}
+      >
+        <SendIcon aria-hidden />
+        Submit Alpha
+      </Button>
+      <Confirm
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={`Submit ${alphaId} to BRAIN?`}
+        confirmLabel="Submit Alpha"
+        danger
+        pending={mutation.isPending}
+        onConfirm={() => mutation.mutate()}
+      >
+        This action is permanent and cannot be undone. BRAIN will submit this Alpha if it passes the
+        platform&apos;s current requirements.
+      </Confirm>
+    </>
   )
 }
 

@@ -544,7 +544,7 @@ const outside = Annotation.define<boolean>()
  */
 const relint = StateEffect.define<null>()
 
-function extensions(live: { current: Live }, label: string) {
+function extensions(live: { current: Live }, label: string, maxLength?: number) {
   return [
     lineNumbers(),
     highlightActiveLineGutter(),
@@ -552,6 +552,11 @@ function extensions(live: { current: Live }, label: string) {
     history(),
     drawSelection(),
     dropCursor(),
+    ...(maxLength === undefined
+      ? []
+      : [
+          EditorState.transactionFilter.of((transaction) => transaction.newDoc.length <= maxLength),
+        ]),
     EditorState.allowMultipleSelections.of(true),
     indentOnInput(),
     fastExpression,
@@ -591,8 +596,9 @@ function extensions(live: { current: Live }, label: string) {
 export function TemplateEditor({
   value,
   label = 'Template',
+  maxLength,
   ...rest
-}: Live & { value: string; label?: string }) {
+}: Live & { value: string; label?: string; maxLength?: number }) {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const live = useRef<Live>(rest)
@@ -606,7 +612,7 @@ export function TemplateEditor({
       parent: host.current,
       state: EditorState.create({
         doc: first.current,
-        extensions: extensions(live, name.current),
+        extensions: extensions(live, name.current, maxLength),
       }),
     })
     view.current = editor
@@ -614,7 +620,7 @@ export function TemplateEditor({
       editor.destroy()
       view.current = null
     }
-  }, [])
+  }, [maxLength])
 
   // Opening a template or Reset replaces the text from outside.
   useEffect(() => {

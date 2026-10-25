@@ -4881,6 +4881,10 @@ export interface components {
         };
         /** SuperPlan */
         SuperPlan: {
+            /** Builtincombos */
+            builtinCombos: components["schemas"]["Recipe"][];
+            /** Builtinselections */
+            builtinSelections: components["schemas"]["Recipe"][];
             /** Combos */
             combos: components["schemas"]["Recipe"][];
             /** Decays */
@@ -4900,6 +4904,10 @@ export interface components {
              * @enum {string}
              */
             activation: "IS" | "OS" | "BOTH";
+            /** Builtincombos */
+            builtinCombos?: string[];
+            /** Builtinselections */
+            builtinSelections?: string[];
             /**
              * Cores
              * @default 3

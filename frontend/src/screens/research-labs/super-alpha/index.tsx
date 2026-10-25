@@ -28,6 +28,11 @@ import { ScopePicker } from '@/ui/scope-picker'
 
 type Schemas = components['schemas']
 type Activation = Schemas['SuperTask']['activation']
+type ExpressionOption = Schemas['Recipe'] & {
+  kind: 'built-in' | 'submitted'
+  usedBy?: number
+  sources?: string[]
+}
 
 const ACTIVATIONS: { value: NonNullable<Activation>; label: string }[] = [
   { value: 'BOTH', label: 'IS and OS' },
@@ -53,6 +58,8 @@ export function SuperAlphaLabScreen() {
   const [comboCode, setComboCode] = useState('')
   const [customSelections, setCustomSelections] = useState<Schemas['Recipe'][]>([])
   const [customCombos, setCustomCombos] = useState<Schemas['Recipe'][]>([])
+  const [builtinSelections, setBuiltinSelections] = useState<string[]>([])
+  const [builtinCombos, setBuiltinCombos] = useState<string[]>([])
   const [selectionSearch, setSelectionSearch] = useState('')
   const [comboSearch, setComboSearch] = useState('')
 
@@ -72,6 +79,8 @@ export function SuperAlphaLabScreen() {
     selectionLimit: limit,
     activation,
     cores,
+    builtinSelections,
+    builtinCombos,
     customSelections,
     customCombos,
   }
@@ -92,7 +101,29 @@ export function SuperAlphaLabScreen() {
     enabled: false,
   })
   const add = useAddTask(() => http.post<Schemas['AddedTask']>('/api/super-lab/tasks', body))
-  const ready = !agnostic && limitValid && options.ready && neutralization !== ''
+  const availableSelections = plan.data?.builtinSelections ?? []
+  const availableCombos = plan.data?.builtinCombos ?? []
+  const selectionExpressions: ExpressionOption[] = [
+    ...availableSelections.map((recipe) => ({ ...recipe, kind: 'built-in' as const })),
+    ...(submitted.data?.selections ?? []).map((recipe) => ({
+      ...recipe,
+      kind: 'submitted' as const,
+    })),
+  ]
+  const comboExpressions: ExpressionOption[] = [
+    ...availableCombos.map((recipe) => ({ ...recipe, kind: 'built-in' as const })),
+    ...(submitted.data?.combos ?? []).map((recipe) => ({ ...recipe, kind: 'submitted' as const })),
+  ]
+  const selectedBuiltinSelectionRecipes = availableSelections.filter((recipe) =>
+    builtinSelections.includes(recipe.name),
+  )
+  const selectedBuiltinComboRecipes = availableCombos.filter((recipe) =>
+    builtinCombos.includes(recipe.name),
+  )
+  const hasSelection = builtinSelections.length > 0 || customSelections.length > 0
+  const hasCombo = builtinCombos.length > 0 || customCombos.length > 0
+  const ready =
+    !agnostic && limitValid && options.ready && neutralization !== '' && hasSelection && hasCombo
 
   return (
     <Page>
@@ -126,8 +157,8 @@ export function SuperAlphaLabScreen() {
       </Panel>
 
       <Panel
-        title="Submitted expressions"
-        description="Load selection and combo expressions from your submitted SuperAlphas, then add either one independently to this simulation task."
+        title="Expression library"
+        description="Built-in expressions are optional. Add any built-in or load expressions from your submitted SuperAlphas to include them in this task."
         actions={
           <Button
             size="sm"
@@ -162,46 +193,66 @@ export function SuperAlphaLabScreen() {
                 title="No submitted SuperAlpha selection or combo expressions were found."
               />
             )}
-            <div className="grid gap-6 lg:grid-cols-2">
-              <ExpressionCatalog
-                title="Selection expressions"
-                recipes={submitted.data.selections}
-                search={selectionSearch}
-                onSearch={setSelectionSearch}
-                added={customSelections}
-                onAdd={(recipe) =>
-                  setCustomSelections((current) =>
-                    current.some((item) => item.code === recipe.code) ||
-                    current.length >= MAX_CUSTOM_RECIPES
-                      ? current
-                      : [...current, { name: recipe.name, code: recipe.code }],
-                  )
-                }
-              />
-              <ExpressionCatalog
-                title="Combo expressions"
-                recipes={submitted.data.combos}
-                search={comboSearch}
-                onSearch={setComboSearch}
-                added={customCombos}
-                onAdd={(recipe) =>
-                  setCustomCombos((current) =>
-                    current.some((item) => item.code === recipe.code) ||
-                    current.length >= MAX_CUSTOM_RECIPES
-                      ? current
-                      : [...current, { name: recipe.name, code: recipe.code }],
-                  )
-                }
-              />
-            </div>
-            {(customSelections.length >= MAX_CUSTOM_RECIPES ||
-              customCombos.length >= MAX_CUSTOM_RECIPES) && (
-              <Notice
-                tone="info"
-                title={`Each list accepts up to ${MAX_CUSTOM_RECIPES} expressions. Remove one below to add another.`}
-              />
-            )}
           </div>
+        )}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <ExpressionCatalog
+            title="Selection expressions"
+            recipes={selectionExpressions}
+            search={selectionSearch}
+            onSearch={setSelectionSearch}
+            added={[...selectedBuiltinSelectionRecipes, ...customSelections]}
+            customAddedCount={customSelections.length}
+            onAdd={(recipe) => {
+              if (recipe.kind === 'built-in') {
+                setBuiltinSelections((current) =>
+                  current.includes(recipe.name) ? current : [...current, recipe.name],
+                )
+                return
+              }
+              setCustomSelections((current) =>
+                current.some((item) => item.code === recipe.code) ||
+                current.length >= MAX_CUSTOM_RECIPES
+                  ? current
+                  : [...current, { name: recipe.name, code: recipe.code }],
+              )
+            }}
+          />
+          <ExpressionCatalog
+            title="Combo expressions"
+            recipes={comboExpressions}
+            search={comboSearch}
+            onSearch={setComboSearch}
+            added={[...selectedBuiltinComboRecipes, ...customCombos]}
+            customAddedCount={customCombos.length}
+            onAdd={(recipe) => {
+              if (recipe.kind === 'built-in') {
+                setBuiltinCombos((current) =>
+                  current.includes(recipe.name) ? current : [...current, recipe.name],
+                )
+                return
+              }
+              setCustomCombos((current) =>
+                current.some((item) => item.code === recipe.code) ||
+                current.length >= MAX_CUSTOM_RECIPES
+                  ? current
+                  : [...current, { name: recipe.name, code: recipe.code }],
+              )
+            }}
+          />
+        </div>
+        {(customSelections.length >= MAX_CUSTOM_RECIPES ||
+          customCombos.length >= MAX_CUSTOM_RECIPES) && (
+          <Notice
+            tone="info"
+            title={`Each list accepts up to ${MAX_CUSTOM_RECIPES} submitted or custom expressions. Remove one below to add another.`}
+          />
+        )}
+        {(!hasSelection || !hasCombo) && (
+          <Notice
+            tone="info"
+            title="Add at least one selection expression and one combo expression to create a task."
+          />
         )}
       </Panel>
 
@@ -258,6 +309,16 @@ export function SuperAlphaLabScreen() {
               </span>
             )}
             <CustomRecipes
+              label="Selected built-in selections"
+              recipes={selectedBuiltinSelectionRecipes}
+              onRemove={(index) => {
+                const recipe = selectedBuiltinSelectionRecipes[index]
+                if (recipe) {
+                  setBuiltinSelections((current) => current.filter((name) => name !== recipe.name))
+                }
+              }}
+            />
+            <CustomRecipes
               label="Added selections"
               recipes={customSelections}
               onRemove={(index) =>
@@ -312,6 +373,16 @@ export function SuperAlphaLabScreen() {
               </span>
             )}
             <CustomRecipes
+              label="Selected built-in combos"
+              recipes={selectedBuiltinComboRecipes}
+              onRemove={(index) => {
+                const recipe = selectedBuiltinComboRecipes[index]
+                if (recipe) {
+                  setBuiltinCombos((current) => current.filter((name) => name !== recipe.name))
+                }
+              }}
+            />
+            <CustomRecipes
               label="Added combos"
               recipes={customCombos}
               onRemove={(index) =>
@@ -364,7 +435,7 @@ export function SuperAlphaLabScreen() {
 
       <Panel
         title="What Runs"
-        description="Every selection with every combo, at two Decays to land Turnover between 2% and 40%. Each runs in Full mode, so BRAIN's own checks say which are submittable: those show green in Tasks and reach the Submission Planner."
+        description="Every selected expression with every selected combo runs at two Decays to land Turnover between 2% and 40%. Each runs in Full mode, so BRAIN's own checks say which are submittable: those show green in Tasks and reach the Submission Planner."
       >
         {plan.isError && <ErrorNotice error={plan.error} title="Could not plan the task" />}
         {plan.data && (
@@ -401,22 +472,23 @@ function ExpressionCatalog({
   search,
   onSearch,
   added,
+  customAddedCount,
   onAdd,
 }: {
   title: string
-  recipes: Schemas['SubmittedExpression'][]
+  recipes: ExpressionOption[]
   search: string
   onSearch: (value: string) => void
   added: Schemas['Recipe'][]
-  onAdd: (recipe: Schemas['SubmittedExpression']) => void
+  customAddedCount: number
+  onAdd: (recipe: ExpressionOption) => void
 }) {
   const query = search.trim().toLocaleLowerCase()
   const matching = recipes.filter((recipe) =>
-    [recipe.name, recipe.code, ...recipe.sources].some((value) =>
+    [recipe.name, recipe.code, ...(recipe.sources ?? [])].some((value) =>
       value.toLocaleLowerCase().includes(query),
     ),
   )
-  const canAdd = added.length < MAX_CUSTOM_RECIPES
 
   return (
     <section className="flex min-w-0 flex-col gap-3">
@@ -438,7 +510,7 @@ function ExpressionCatalog({
       </div>
       <div className="flex max-h-[28rem] min-h-24 flex-col gap-2 overflow-y-auto pr-1">
         {recipes.length === 0 ? (
-          <p className="py-3 text-body-compact text-ink-subtle">No expressions loaded.</p>
+          <p className="py-3 text-body-compact text-ink-subtle">No expressions available.</p>
         ) : matching.length === 0 ? (
           <p className="py-3 text-body-compact text-ink-subtle">
             No expressions match this search.
@@ -446,6 +518,7 @@ function ExpressionCatalog({
         ) : (
           matching.map((recipe) => {
             const isAdded = added.some((item) => item.code === recipe.code)
+            const canAdd = recipe.kind === 'built-in' || customAddedCount < MAX_CUSTOM_RECIPES
             return (
               <article
                 key={recipe.code}
@@ -456,10 +529,14 @@ function ExpressionCatalog({
                     <strong className="break-words text-body-compact font-medium text-ink">
                       {recipe.name}
                     </strong>
-                    <span className="text-caption text-ink-subtle">
-                      Used by {fmt.int(recipe.usedBy)} submitted SuperAlpha
-                      {recipe.usedBy === 1 ? '' : 's'}
-                    </span>
+                    {recipe.kind === 'built-in' ? (
+                      <span className="text-caption text-ink-subtle">Built-in · optional</span>
+                    ) : (
+                      <span className="text-caption text-ink-subtle">
+                        Used by {fmt.int(recipe.usedBy ?? 0)} submitted SuperAlpha
+                        {recipe.usedBy === 1 ? '' : 's'}
+                      </span>
+                    )}
                   </div>
                   <Button
                     size="sm"
@@ -473,10 +550,10 @@ function ExpressionCatalog({
                 <code className="num max-h-24 overflow-y-auto whitespace-pre-wrap break-all rounded-xs bg-surface-1 p-2 text-caption text-ink-muted">
                   {recipe.code}
                 </code>
-                {recipe.sources.length > 0 && (
+                {(recipe.sources?.length ?? 0) > 0 && (
                   <p className="text-caption text-ink-subtle">
-                    Examples: {recipe.sources.join(' · ')}
-                    {recipe.usedBy > recipe.sources.length ? ' · and others' : ''}
+                    Examples: {recipe.sources?.join(' · ')}
+                    {(recipe.usedBy ?? 0) > (recipe.sources?.length ?? 0) ? ' · and others' : ''}
                   </p>
                 )}
               </article>

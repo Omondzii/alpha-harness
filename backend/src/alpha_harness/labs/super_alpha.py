@@ -4,9 +4,9 @@ A SuperAlpha is a selection expression, ranking every submitted ``ACTIVE`` Alpha
 region and delay and keeping the top ``selectionLimit``, and a combo expression, weighting
 the kept Alphas each day. Nothing here searches either expression: SuperAlpha simulations
 are slow and BRAIN runs three at a time, so the lab crosses a small library of
-economically grounded selections with proven weighting schemes, each at two decays to land
-Turnover inside the 2% to 40% a SuperAlpha must clear, and lets BRAIN's own checks say
-which are submittable.
+economically grounded selections with proven weighting schemes for users to choose from.
+Each pairing runs at two decays to land Turnover inside the 2% to 40% a SuperAlpha must
+clear, and BRAIN's own checks say which are submittable.
 
 Every selection caps each Alpha's operators at 8,000 / limit: BRAIN warns rather than
 fails past 8,000 operators in all, and drops what does not fit.
@@ -113,16 +113,18 @@ def candidates(
     neutralization: str,
     selection_limit: int,
     activations: list[str],
-    extra_selections: list[Recipe] | None = None,
-    extra_combos: list[Recipe] | None = None,
+    selection_recipes: list[Recipe] | None = None,
+    combo_recipes: list[Recipe] | None = None,
 ) -> list[Candidate]:
     """Every selection · combo · decay · activation, as Full SUPER simulations.
 
     Full mode always: only a Full simulation can be submitted, and Quick runs none of the
     correlation checks a SuperAlpha must also pass.
     """
-    selection_recipes = [*selections(selection_limit), *(extra_selections or [])]
-    combo_recipes = [*COMBOS, *(extra_combos or [])]
+    selection_recipes = (
+        selections(selection_limit) if selection_recipes is None else selection_recipes
+    )
+    combo_recipes = COMBOS if combo_recipes is None else combo_recipes
     out: list[Candidate] = []
     for activation in activations:
         for decay in DECAYS:

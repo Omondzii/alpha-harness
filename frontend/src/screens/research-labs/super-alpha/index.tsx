@@ -151,12 +151,6 @@ export function SuperAlphaLabScreen() {
         title="Expressions"
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Segmented
-              label="Expression source"
-              items={EXPRESSION_TABS}
-              value={expressionTab}
-              onChange={setExpressionTab}
-            />
             {expressionTab === 'submitted' && (
               <Button
                 size="sm"
@@ -167,6 +161,12 @@ export function SuperAlphaLabScreen() {
                 {submitted.data ? 'Refresh expressions' : 'Load expressions'}
               </Button>
             )}
+            <Segmented
+              label="Expression source"
+              items={EXPRESSION_TABS}
+              value={expressionTab}
+              onChange={setExpressionTab}
+            />
           </div>
         }
       >
@@ -438,7 +438,7 @@ function ExpressionCatalog({
           disabled={recipes.length === 0}
         />
       </div>
-      <div className="flex max-h-[18rem] min-h-24 flex-col gap-2 overflow-y-auto pr-1">
+      <div className="flex max-h-[15rem] min-h-24 flex-col gap-2 overflow-y-auto pr-1">
         {recipes.length === 0 ? (
           <p className="py-3 text-body-compact text-ink-subtle">No expressions available.</p>
         ) : matching.length === 0 ? (

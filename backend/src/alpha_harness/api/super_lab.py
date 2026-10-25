@@ -53,9 +53,16 @@ class SuperPlan(Out):
     simulations: int
 
 
+class SubmittedExpression(Out):
+    name: str
+    code: str
+    used_by: int
+    sources: list[str]
+
+
 class SubmittedExpressions(Out):
-    selections: list[Recipe]
-    combos: list[Recipe]
+    selections: list[SubmittedExpression]
+    combos: list[SubmittedExpression]
     truncated: bool
     omitted: int
 
@@ -65,9 +72,14 @@ def _recipe_name(name: str | None, alpha_id: str, expression_type: str) -> str:
     return f"{label} · {alpha_id[-10:]} · {expression_type}"
 
 
+def _source_name(name: str | None, alpha_id: str) -> str:
+    label = (name or "Submitted SuperAlpha").strip()[:40]
+    return f"{label} · {alpha_id[-10:]}"
+
+
 async def _submitted_expressions(endpoints: BrainEndpoints) -> SubmittedExpressions:
-    selections: dict[str, Recipe] = {}
-    combos: dict[str, Recipe] = {}
+    selections: dict[str, tuple[str, int, list[str]]] = {}
+    combos: dict[str, tuple[str, int, list[str]]] = {}
     offset = 0
     truncated = False
     omitted = 0
@@ -99,26 +111,30 @@ async def _submitted_expressions(endpoints: BrainEndpoints) -> SubmittedExpressi
 
         full_alphas = await asyncio.gather(*(complete(alpha) for alpha in candidates))
         for alpha in full_alphas:
-            title = alpha.name
+            source = _source_name(alpha.name, alpha.id)
             if alpha.selection and (code := alpha.selection.code):
                 if len(code) <= 2000:
-                    selections.setdefault(
+                    name, count, sources = selections.get(
                         code,
-                        Recipe(
-                            name=_recipe_name(title, alpha.id, "selection"),
-                            code=code,
-                        ),
+                        (_recipe_name(alpha.name, alpha.id, "selection"), 0, []),
+                    )
+                    selections[code] = (
+                        name,
+                        count + 1,
+                        [*sources, source] if len(sources) < 3 else sources,
                     )
                 else:
                     omitted += 1
             if alpha.combo and (code := alpha.combo.code):
                 if len(code) <= 2000:
-                    combos.setdefault(
+                    name, count, sources = combos.get(
                         code,
-                        Recipe(
-                            name=_recipe_name(title, alpha.id, "combo"),
-                            code=code,
-                        ),
+                        (_recipe_name(alpha.name, alpha.id, "combo"), 0, []),
+                    )
+                    combos[code] = (
+                        name,
+                        count + 1,
+                        [*sources, source] if len(sources) < 3 else sources,
                     )
                 else:
                     omitted += 1
@@ -131,8 +147,14 @@ async def _submitted_expressions(endpoints: BrainEndpoints) -> SubmittedExpressi
         offset += ALPHA_PAGE_SIZE
 
     return SubmittedExpressions(
-        selections=list(selections.values()),
-        combos=list(combos.values()),
+        selections=[
+            SubmittedExpression(name=name, code=code, used_by=count, sources=sources)
+            for code, (name, count, sources) in selections.items()
+        ],
+        combos=[
+            SubmittedExpression(name=name, code=code, used_by=count, sources=sources)
+            for code, (name, count, sources) in combos.items()
+        ],
         truncated=truncated,
         omitted=omitted,
     )

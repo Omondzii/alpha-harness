@@ -4850,14 +4850,25 @@ export interface components {
             /** Unvalidated */
             unvalidated: number;
         };
+        /** SubmittedExpression */
+        SubmittedExpression: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Sources */
+            sources: string[];
+            /** Usedby */
+            usedBy: number;
+        };
         /** SubmittedExpressions */
         SubmittedExpressions: {
             /** Combos */
-            combos: components["schemas"]["Recipe"][];
+            combos: components["schemas"]["SubmittedExpression"][];
             /** Omitted */
             omitted: number;
             /** Selections */
-            selections: components["schemas"]["Recipe"][];
+            selections: components["schemas"]["SubmittedExpression"][];
             /** Truncated */
             truncated: boolean;
         };

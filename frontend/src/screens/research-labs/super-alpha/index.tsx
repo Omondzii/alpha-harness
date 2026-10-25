@@ -1,7 +1,7 @@
 /** Super Alpha Lab: SuperAlphas built from your own submitted Alphas, every pairing in one task. */
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { XIcon } from 'lucide-react'
+import { SearchIcon, XIcon } from 'lucide-react'
 import { useState } from 'react'
 import type { components } from '@/api/generated'
 import { http } from '@/api/http'
@@ -53,8 +53,8 @@ export function SuperAlphaLabScreen() {
   const [comboCode, setComboCode] = useState('')
   const [customSelections, setCustomSelections] = useState<Schemas['Recipe'][]>([])
   const [customCombos, setCustomCombos] = useState<Schemas['Recipe'][]>([])
-  const [submittedSelection, setSubmittedSelection] = useState('')
-  const [submittedCombo, setSubmittedCombo] = useState('')
+  const [selectionSearch, setSelectionSearch] = useState('')
+  const [comboSearch, setComboSearch] = useState('')
 
   // BRAIN's own list for the market; Subindustry first where it has one, as most Alphas use it.
   const neutralization = options.neutralizations.some((n) => n.value === picked)
@@ -93,12 +93,6 @@ export function SuperAlphaLabScreen() {
   })
   const add = useAddTask(() => http.post<Schemas['AddedTask']>('/api/super-lab/tasks', body))
   const ready = !agnostic && limitValid && options.ready && neutralization !== ''
-  const importedSelection = submitted.data?.selections.find(
-    (recipe) => recipe.code === submittedSelection,
-  )
-  const importedCombo = submitted.data?.combos.find((recipe) => recipe.code === submittedCombo)
-  const selectionAdded = customSelections.some((recipe) => recipe.code === importedSelection?.code)
-  const comboAdded = customCombos.some((recipe) => recipe.code === importedCombo?.code)
 
   return (
     <Page>
@@ -169,75 +163,44 @@ export function SuperAlphaLabScreen() {
               />
             )}
             <div className="grid gap-6 lg:grid-cols-2">
-              <section className="flex min-w-0 flex-col items-start gap-3">
-                <Field label="Submitted selection expression" className="w-full">
-                  <Select
-                    label="Submitted selection expression"
-                    items={submitted.data.selections.map((recipe) => ({
-                      value: recipe.code,
-                      label: recipe.name,
-                    }))}
-                    value={submittedSelection || null}
-                    onChange={setSubmittedSelection}
-                    className="w-full"
-                    disabled={submitted.data.selections.length === 0}
-                  />
-                </Field>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={
-                    !importedSelection ||
-                    selectionAdded ||
-                    customSelections.length >= MAX_CUSTOM_RECIPES
-                  }
-                  onClick={() => {
-                    if (!importedSelection) return
-                    setCustomSelections((current) =>
-                      current.some((recipe) => recipe.code === importedSelection.code) ||
-                      current.length >= MAX_CUSTOM_RECIPES
-                        ? current
-                        : [...current, importedSelection],
-                    )
-                  }}
-                >
-                  {selectionAdded ? 'Selection added' : 'Add selected selection'}
-                </Button>
-              </section>
-              <section className="flex min-w-0 flex-col items-start gap-3">
-                <Field label="Submitted combo expression" className="w-full">
-                  <Select
-                    label="Submitted combo expression"
-                    items={submitted.data.combos.map((recipe) => ({
-                      value: recipe.code,
-                      label: recipe.name,
-                    }))}
-                    value={submittedCombo || null}
-                    onChange={setSubmittedCombo}
-                    className="w-full"
-                    disabled={submitted.data.combos.length === 0}
-                  />
-                </Field>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={
-                    !importedCombo || comboAdded || customCombos.length >= MAX_CUSTOM_RECIPES
-                  }
-                  onClick={() => {
-                    if (!importedCombo) return
-                    setCustomCombos((current) =>
-                      current.some((recipe) => recipe.code === importedCombo.code) ||
-                      current.length >= MAX_CUSTOM_RECIPES
-                        ? current
-                        : [...current, importedCombo],
-                    )
-                  }}
-                >
-                  {comboAdded ? 'Combo added' : 'Add selected combo'}
-                </Button>
-              </section>
+              <ExpressionCatalog
+                title="Selection expressions"
+                recipes={submitted.data.selections}
+                search={selectionSearch}
+                onSearch={setSelectionSearch}
+                added={customSelections}
+                onAdd={(recipe) =>
+                  setCustomSelections((current) =>
+                    current.some((item) => item.code === recipe.code) ||
+                    current.length >= MAX_CUSTOM_RECIPES
+                      ? current
+                      : [...current, { name: recipe.name, code: recipe.code }],
+                  )
+                }
+              />
+              <ExpressionCatalog
+                title="Combo expressions"
+                recipes={submitted.data.combos}
+                search={comboSearch}
+                onSearch={setComboSearch}
+                added={customCombos}
+                onAdd={(recipe) =>
+                  setCustomCombos((current) =>
+                    current.some((item) => item.code === recipe.code) ||
+                    current.length >= MAX_CUSTOM_RECIPES
+                      ? current
+                      : [...current, { name: recipe.name, code: recipe.code }],
+                  )
+                }
+              />
             </div>
+            {(customSelections.length >= MAX_CUSTOM_RECIPES ||
+              customCombos.length >= MAX_CUSTOM_RECIPES) && (
+              <Notice
+                tone="info"
+                title={`Each list accepts up to ${MAX_CUSTOM_RECIPES} expressions. Remove one below to add another.`}
+              />
+            )}
           </div>
         )}
       </Panel>
@@ -429,6 +392,104 @@ export function SuperAlphaLabScreen() {
         )}
       </Panel>
     </Page>
+  )
+}
+
+function ExpressionCatalog({
+  title,
+  recipes,
+  search,
+  onSearch,
+  added,
+  onAdd,
+}: {
+  title: string
+  recipes: Schemas['SubmittedExpression'][]
+  search: string
+  onSearch: (value: string) => void
+  added: Schemas['Recipe'][]
+  onAdd: (recipe: Schemas['SubmittedExpression']) => void
+}) {
+  const query = search.trim().toLocaleLowerCase()
+  const matching = recipes.filter((recipe) =>
+    [recipe.name, recipe.code, ...recipe.sources].some((value) =>
+      value.toLocaleLowerCase().includes(query),
+    ),
+  )
+  const canAdd = added.length < MAX_CUSTOM_RECIPES
+
+  return (
+    <section className="flex min-w-0 flex-col gap-3">
+      <h3 className="text-title">{title}</h3>
+      <div className="relative w-full">
+        <SearchIcon
+          className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-subtle"
+          aria-hidden
+        />
+        <Input
+          type="search"
+          value={search}
+          onChange={(event) => onSearch(event.target.value)}
+          placeholder={`Search ${title.toLocaleLowerCase()} or source Alpha`}
+          aria-label={`Search ${title.toLocaleLowerCase()} or source Alpha`}
+          className="w-full pl-9"
+          disabled={recipes.length === 0}
+        />
+      </div>
+      <div className="flex max-h-[28rem] min-h-24 flex-col gap-2 overflow-y-auto pr-1">
+        {recipes.length === 0 ? (
+          <p className="py-3 text-body-compact text-ink-subtle">No expressions loaded.</p>
+        ) : matching.length === 0 ? (
+          <p className="py-3 text-body-compact text-ink-subtle">
+            No expressions match this search.
+          </p>
+        ) : (
+          matching.map((recipe) => {
+            const isAdded = added.some((item) => item.code === recipe.code)
+            return (
+              <article
+                key={recipe.code}
+                className="flex min-w-0 flex-col gap-2 rounded-sm border border-hairline bg-surface-2 p-3"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <strong className="break-words text-body-compact font-medium text-ink">
+                      {recipe.name}
+                    </strong>
+                    <span className="text-caption text-ink-subtle">
+                      Used by {fmt.int(recipe.usedBy)} submitted SuperAlpha
+                      {recipe.usedBy === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={isAdded || !canAdd}
+                    onClick={() => onAdd(recipe)}
+                  >
+                    {isAdded ? 'Added' : 'Add'}
+                  </Button>
+                </div>
+                <code className="num max-h-24 overflow-y-auto whitespace-pre-wrap break-all rounded-xs bg-surface-1 p-2 text-caption text-ink-muted">
+                  {recipe.code}
+                </code>
+                {recipe.sources.length > 0 && (
+                  <p className="text-caption text-ink-subtle">
+                    Examples: {recipe.sources.join(' · ')}
+                    {recipe.usedBy > recipe.sources.length ? ' · and others' : ''}
+                  </p>
+                )}
+              </article>
+            )
+          })
+        )}
+      </div>
+      {recipes.length > 0 && (
+        <span className="text-caption text-ink-subtle">
+          {fmt.int(matching.length)} of {fmt.int(recipes.length)} unique expressions
+        </span>
+      )}
+    </section>
   )
 }
 

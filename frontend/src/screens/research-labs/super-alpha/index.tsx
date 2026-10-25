@@ -39,6 +39,10 @@ const CORES = [1, 2, 3].map((n) => ({ value: n, label: String(n) }))
 const MIN_LIMIT = 10
 const MAX_LIMIT = 200
 const MAX_CUSTOM_RECIPES = 5
+const EXPRESSION_TABS: { value: 'submitted' | 'custom'; label: string }[] = [
+  { value: 'submitted', label: 'Submitted expressions' },
+  { value: 'custom', label: 'Custom expressions' },
+]
 
 export function SuperAlphaLabScreen() {
   const [scope, setScope] = useScope('/labs/super-alpha')
@@ -53,6 +57,7 @@ export function SuperAlphaLabScreen() {
   const [comboCode, setComboCode] = useState('')
   const [customSelections, setCustomSelections] = useState<Schemas['Recipe'][]>([])
   const [customCombos, setCustomCombos] = useState<Schemas['Recipe'][]>([])
+  const [expressionTab, setExpressionTab] = useState<'submitted' | 'custom'>('submitted')
   const [selectionSearch, setSelectionSearch] = useState('')
   const [comboSearch, setComboSearch] = useState('')
 
@@ -131,76 +136,202 @@ export function SuperAlphaLabScreen() {
       </Panel>
 
       <Panel
-        title="Submitted expressions"
-        description="Load selection and combo expressions from your submitted SuperAlphas, then add either one independently to this simulation task."
+        title="Expressions"
+        description="Choose expressions from your submitted SuperAlphas or create your own."
         actions={
-          <Button
-            size="sm"
-            variant="secondary"
-            loading={submitted.isFetching}
-            onClick={() => void submitted.refetch()}
-          >
-            {submitted.data ? 'Refresh expressions' : 'Load expressions'}
-          </Button>
-        }
-      >
-        {submitted.isError && (
-          <ErrorNotice error={submitted.error} title="Could not load submitted expressions" />
-        )}
-        {submitted.data && (
-          <div className="flex flex-col gap-4">
-            {submitted.data.omitted > 0 && (
-              <Notice
-                tone="info"
-                title={`${submitted.data.omitted} submitted expression${submitted.data.omitted === 1 ? '' : 's'} exceeded the 2,000-character limit and could not be imported.`}
-              />
-            )}
-            {submitted.data.truncated && (
-              <Notice
-                tone="info"
-                title="Only the newest submitted SuperAlphas were loaded because BRAIN limits how far this list can be paged."
-              />
-            )}
-            {submitted.data.selections.length === 0 && submitted.data.combos.length === 0 && (
-              <Notice
-                tone="info"
-                title="No submitted SuperAlpha selection or combo expressions were found."
-              />
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Segmented
+              label="Expression source"
+              items={EXPRESSION_TABS}
+              value={expressionTab}
+              onChange={setExpressionTab}
+            />
+            {expressionTab === 'submitted' && (
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={submitted.isFetching}
+                onClick={() => void submitted.refetch()}
+              >
+                {submitted.data ? 'Refresh expressions' : 'Load expressions'}
+              </Button>
             )}
           </div>
+        }
+      >
+        {expressionTab === 'submitted' ? (
+          <>
+            {submitted.isError && (
+              <ErrorNotice error={submitted.error} title="Could not load submitted expressions" />
+            )}
+            {submitted.data && (
+              <div className="flex flex-col gap-4">
+                {submitted.data.omitted > 0 && (
+                  <Notice
+                    tone="info"
+                    title={`${submitted.data.omitted} submitted expression${submitted.data.omitted === 1 ? '' : 's'} exceeded the 2,000-character limit and could not be imported.`}
+                  />
+                )}
+                {submitted.data.truncated && (
+                  <Notice
+                    tone="info"
+                    title="Only the newest submitted SuperAlphas were loaded because BRAIN limits how far this list can be paged."
+                  />
+                )}
+                {submitted.data.selections.length === 0 && submitted.data.combos.length === 0 && (
+                  <Notice
+                    tone="info"
+                    title="No submitted SuperAlpha selection or combo expressions were found."
+                  />
+                )}
+              </div>
+            )}
+            <div className="grid gap-6 lg:grid-cols-2">
+              <ExpressionCatalog
+                title="Selection expressions"
+                recipes={selectionExpressions}
+                search={selectionSearch}
+                onSearch={setSelectionSearch}
+                added={customSelections}
+                onAdd={(recipe) =>
+                  setCustomSelections((current) =>
+                    current.some((item) => item.code === recipe.code) ||
+                    current.length >= MAX_CUSTOM_RECIPES
+                      ? current
+                      : [...current, { name: recipe.name, code: recipe.code }],
+                  )
+                }
+              />
+              <ExpressionCatalog
+                title="Combo expressions"
+                recipes={comboExpressions}
+                search={comboSearch}
+                onSearch={setComboSearch}
+                added={customCombos}
+                onAdd={(recipe) =>
+                  setCustomCombos((current) =>
+                    current.some((item) => item.code === recipe.code) ||
+                    current.length >= MAX_CUSTOM_RECIPES
+                      ? current
+                      : [...current, { name: recipe.name, code: recipe.code }],
+                  )
+                }
+              />
+            </div>
+          </>
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <section className="flex min-w-0 flex-col items-start gap-3">
+              <h2 className="text-title">Custom selection</h2>
+              <Field label="Name" className="w-full">
+                <Input
+                  value={selectionName}
+                  maxLength={80}
+                  placeholder={`Custom selection ${customSelections.length + 1}`}
+                  onChange={(e) => setSelectionName(e.target.value)}
+                />
+              </Field>
+              <Field
+                label="Scoring expression"
+                hint="Scores are clamped to zero or above; the operator-count cap is added automatically."
+                className="w-full"
+              >
+                <Textarea
+                  rows={3}
+                  maxLength={2000}
+                  value={selectionCode}
+                  onChange={(e) => setSelectionCode(e.target.value)}
+                  placeholder="(1 - self_correlation) * (1 - prod_correlation)"
+                  className="num"
+                />
+              </Field>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!selectionCode.trim() || customSelections.length >= MAX_CUSTOM_RECIPES}
+                onClick={() => {
+                  setCustomSelections((current) => [
+                    ...current,
+                    {
+                      name: selectionName.trim() || `Custom selection ${current.length + 1}`,
+                      code: selectionCode.trim(),
+                    },
+                  ])
+                  setSelectionName('')
+                  setSelectionCode('')
+                }}
+              >
+                Add selection
+              </Button>
+              {customSelections.length >= MAX_CUSTOM_RECIPES && (
+                <span className="text-caption text-ink-subtle">
+                  Maximum {MAX_CUSTOM_RECIPES} custom selections.
+                </span>
+              )}
+              <CustomRecipes
+                label="Added selections"
+                recipes={customSelections}
+                onRemove={(index) =>
+                  setCustomSelections((current) => current.filter((_, i) => i !== index))
+                }
+              />
+            </section>
+
+            <section className="flex min-w-0 flex-col items-start gap-3">
+              <h2 className="text-title">Custom combo</h2>
+              <Field label="Name" className="w-full">
+                <Input
+                  value={comboName}
+                  maxLength={80}
+                  placeholder={`Custom combo ${customCombos.length + 1}`}
+                  onChange={(e) => setComboName(e.target.value)}
+                />
+              </Field>
+              <Field label="Weight expression" className="w-full">
+                <Textarea
+                  rows={3}
+                  maxLength={2000}
+                  value={comboCode}
+                  onChange={(e) => setComboCode(e.target.value)}
+                  placeholder={
+                    'stats = generate_stats(alpha);\n1 / (ts_std_dev(stats.returns, 120) + 0.0001)'
+                  }
+                  className="num"
+                />
+              </Field>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!comboCode.trim() || customCombos.length >= MAX_CUSTOM_RECIPES}
+                onClick={() => {
+                  setCustomCombos((current) => [
+                    ...current,
+                    {
+                      name: comboName.trim() || `Custom combo ${current.length + 1}`,
+                      code: comboCode.trim(),
+                    },
+                  ])
+                  setComboName('')
+                  setComboCode('')
+                }}
+              >
+                Add combo
+              </Button>
+              {customCombos.length >= MAX_CUSTOM_RECIPES && (
+                <span className="text-caption text-ink-subtle">
+                  Maximum {MAX_CUSTOM_RECIPES} custom combos.
+                </span>
+              )}
+              <CustomRecipes
+                label="Added combos"
+                recipes={customCombos}
+                onRemove={(index) =>
+                  setCustomCombos((current) => current.filter((_, i) => i !== index))
+                }
+              />
+            </section>
+          </div>
         )}
-        <div className="grid gap-6 lg:grid-cols-2">
-          <ExpressionCatalog
-            title="Selection expressions"
-            recipes={selectionExpressions}
-            search={selectionSearch}
-            onSearch={setSelectionSearch}
-            added={customSelections}
-            onAdd={(recipe) =>
-              setCustomSelections((current) =>
-                current.some((item) => item.code === recipe.code) ||
-                current.length >= MAX_CUSTOM_RECIPES
-                  ? current
-                  : [...current, { name: recipe.name, code: recipe.code }],
-              )
-            }
-          />
-          <ExpressionCatalog
-            title="Combo expressions"
-            recipes={comboExpressions}
-            search={comboSearch}
-            onSearch={setComboSearch}
-            added={customCombos}
-            onAdd={(recipe) =>
-              setCustomCombos((current) =>
-                current.some((item) => item.code === recipe.code) ||
-                current.length >= MAX_CUSTOM_RECIPES
-                  ? current
-                  : [...current, { name: recipe.name, code: recipe.code }],
-              )
-            }
-          />
-        </div>
         {(customSelections.length >= MAX_CUSTOM_RECIPES ||
           customCombos.length >= MAX_CUSTOM_RECIPES) && (
           <Notice
@@ -217,131 +348,14 @@ export function SuperAlphaLabScreen() {
       </Panel>
 
       <Panel
-        title="Custom Expressions"
-        description="Add your own selection scores and combo weights."
-      >
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="flex min-w-0 flex-col items-start gap-3">
-            <h2 className="text-title">Custom selection</h2>
-            <Field label="Name" className="w-full">
-              <Input
-                value={selectionName}
-                maxLength={80}
-                placeholder={`Custom selection ${customSelections.length + 1}`}
-                onChange={(e) => setSelectionName(e.target.value)}
-              />
-            </Field>
-            <Field
-              label="Scoring expression"
-              hint="Scores are clamped to zero or above; the operator-count cap is added automatically."
-              className="w-full"
-            >
-              <Textarea
-                rows={3}
-                maxLength={2000}
-                value={selectionCode}
-                onChange={(e) => setSelectionCode(e.target.value)}
-                placeholder="(1 - self_correlation) * (1 - prod_correlation)"
-                className="num"
-              />
-            </Field>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={!selectionCode.trim() || customSelections.length >= MAX_CUSTOM_RECIPES}
-              onClick={() => {
-                setCustomSelections((current) => [
-                  ...current,
-                  {
-                    name: selectionName.trim() || `Custom selection ${current.length + 1}`,
-                    code: selectionCode.trim(),
-                  },
-                ])
-                setSelectionName('')
-                setSelectionCode('')
-              }}
-            >
-              Add selection
-            </Button>
-            {customSelections.length >= MAX_CUSTOM_RECIPES && (
-              <span className="text-caption text-ink-subtle">
-                Maximum {MAX_CUSTOM_RECIPES} custom selections.
-              </span>
-            )}
-            <CustomRecipes
-              label="Added selections"
-              recipes={customSelections}
-              onRemove={(index) =>
-                setCustomSelections((current) => current.filter((_, i) => i !== index))
-              }
-            />
-          </section>
-
-          <section className="flex min-w-0 flex-col items-start gap-3">
-            <h2 className="text-title">Custom combo</h2>
-            <Field label="Name" className="w-full">
-              <Input
-                value={comboName}
-                maxLength={80}
-                placeholder={`Custom combo ${customCombos.length + 1}`}
-                onChange={(e) => setComboName(e.target.value)}
-              />
-            </Field>
-            <Field label="Weight expression" className="w-full">
-              <Textarea
-                rows={3}
-                maxLength={2000}
-                value={comboCode}
-                onChange={(e) => setComboCode(e.target.value)}
-                placeholder={
-                  'stats = generate_stats(alpha);\n1 / (ts_std_dev(stats.returns, 120) + 0.0001)'
-                }
-                className="num"
-              />
-            </Field>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={!comboCode.trim() || customCombos.length >= MAX_CUSTOM_RECIPES}
-              onClick={() => {
-                setCustomCombos((current) => [
-                  ...current,
-                  {
-                    name: comboName.trim() || `Custom combo ${current.length + 1}`,
-                    code: comboCode.trim(),
-                  },
-                ])
-                setComboName('')
-                setComboCode('')
-              }}
-            >
-              Add combo
-            </Button>
-            {customCombos.length >= MAX_CUSTOM_RECIPES && (
-              <span className="text-caption text-ink-subtle">
-                Maximum {MAX_CUSTOM_RECIPES} custom combos.
-              </span>
-            )}
-            <CustomRecipes
-              label="Added combos"
-              recipes={customCombos}
-              onRemove={(index) =>
-                setCustomCombos((current) => current.filter((_, i) => i !== index))
-              }
-            />
-          </section>
-        </div>
-      </Panel>
-
-      <Panel
         title="Settings"
         description="Selection Handling is Positive: an Alpha a selection scores zero is left out."
       >
-        <div className="flex flex-wrap items-end gap-6">
-          <Field
-            label="Selection Limit"
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <Fieldset
+            legend="Selection Limit"
             hint={`Alphas kept from the top of each ranking, ${MIN_LIMIT} to ${MAX_LIMIT}.`}
-            className="w-48"
+            className="rounded-sm border border-hairline bg-surface-2 p-3"
           >
             <Input
               type="number"
@@ -349,10 +363,13 @@ export function SuperAlphaLabScreen() {
               max={MAX_LIMIT}
               value={Number.isNaN(limit) ? '' : String(limit)}
               onChange={(e) => setLimit(e.target.valueAsNumber)}
-              className="num"
+              className="w-full num"
             />
-          </Field>
-          <Fieldset legend="Component Activation">
+          </Fieldset>
+          <Fieldset
+            legend="Component Activation"
+            className="rounded-sm border border-hairline bg-surface-2 p-3"
+          >
             <Segmented
               label="Component Activation"
               items={ACTIVATIONS}
@@ -360,7 +377,7 @@ export function SuperAlphaLabScreen() {
               onChange={setActivation}
             />
           </Fieldset>
-          <Fieldset legend="Cores">
+          <Fieldset legend="Cores" className="rounded-sm border border-hairline bg-surface-2 p-3">
             <Segmented label="Cores" items={CORES} value={cores} onChange={setCores} />
           </Fieldset>
         </div>
@@ -389,12 +406,14 @@ export function SuperAlphaLabScreen() {
               />
               <Metric boxed label="Truncation" value={String(plan.data.truncation)} />
             </div>
-            <Disclosure summary={`Selections (${plan.data.selections.length})`}>
-              <Recipes recipes={plan.data.selections} />
-            </Disclosure>
-            <Disclosure summary={`Combos (${plan.data.combos.length})`}>
-              <Recipes recipes={plan.data.combos} />
-            </Disclosure>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Disclosure summary={`Selections (${plan.data.selections.length})`}>
+                <Recipes recipes={plan.data.selections} />
+              </Disclosure>
+              <Disclosure summary={`Combos (${plan.data.combos.length})`}>
+                <Recipes recipes={plan.data.combos} />
+              </Disclosure>
+            </div>
             <Notice
               tone="info"
               title="Each selection caps an Alpha's operators at 8,000 divided by the Selection Limit, so the selected Alphas never pass BRAIN's 8,000-operator ceiling. Submitting stays on BRAIN, with a description of the selection and the combo."

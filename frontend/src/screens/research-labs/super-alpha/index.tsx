@@ -10,7 +10,7 @@ import { fmt } from '@/lib/format'
 import { REGION_AGNOSTIC, useScope, useScopeOptions } from '@/lib/scope'
 import { AddTaskButtons, useAddTask } from '@/screens/research-labs/add-task'
 import { templateLab } from '@/screens/research-labs/template/api'
-import { TemplateEditor } from '@/screens/research-labs/template/editor'
+import { ExpressionCode, TemplateEditor } from '@/screens/research-labs/template/editor'
 import {
   Button,
   Disclosure,
@@ -467,9 +467,7 @@ function ExpressionCatalog({
                 className="flex min-w-0 items-center gap-3 rounded-md border border-hairline bg-surface-2/50 p-2.5 transition-colors hover:bg-surface-2"
               >
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <code className="num whitespace-pre-wrap break-words text-body-compact text-ink">
-                    {recipe.code}
-                  </code>
+                  <ExpressionCode value={recipe.code} />
                   {source && (
                     <code className="num break-all text-caption text-ink-subtle">{source}</code>
                   )}

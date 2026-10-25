@@ -175,6 +175,63 @@ const theme = EditorView.theme(
   { dark: true },
 )
 
+const expressionCodeTheme = EditorView.theme(
+  {
+    '&': {
+      color: '#d4d4d4',
+      backgroundColor: 'transparent',
+      fontSize: 'inherit',
+    },
+    '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.5', overflow: 'hidden' },
+    '.cm-content': {
+      padding: '0',
+      minHeight: '0',
+      whiteSpace: 'pre-wrap',
+      overflowWrap: 'anywhere',
+    },
+    '.cm-line': { padding: '0' },
+  },
+  { dark: true },
+)
+
+export function ExpressionCode({ value }: { value: string }) {
+  const host = useRef<HTMLDivElement>(null)
+  const view = useRef<EditorView | null>(null)
+  const first = useRef(value)
+
+  useEffect(() => {
+    if (!host.current) return
+    const editor = new EditorView({
+      parent: host.current,
+      state: EditorState.create({
+        doc: first.current,
+        extensions: [
+          fastExpression,
+          syntaxHighlighting(darkPlus),
+          EditorState.readOnly.of(true),
+          EditorView.editable.of(false),
+          EditorView.lineWrapping,
+          EditorView.contentAttributes.of({ 'aria-label': 'Alpha expression' }),
+          expressionCodeTheme,
+        ],
+      }),
+    })
+    view.current = editor
+    return () => {
+      editor.destroy()
+      view.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    const editor = view.current
+    if (editor && editor.state.doc.toString() !== value)
+      editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: value } })
+  }, [value])
+
+  return <div ref={host} className="min-w-0" />
+}
+
 // --- reading the document -------------------------------------------------------------
 
 /** Redraws the names once a field's type arrives or the market changes. */

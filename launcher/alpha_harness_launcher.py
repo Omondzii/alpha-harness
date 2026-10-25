@@ -39,6 +39,8 @@ REPOSITORY = os.environ.get(REPOSITORY_VARIABLE) or "residual-lab/alpha-harness"
 DOWNLOAD = f"https://github.com/{REPOSITORY}/releases/download"
 
 HOME_VARIABLE = "ALPHA_HARNESS_HOME"
+DATA_DIR_VARIABLE = "ALPHA_HARNESS_DATA_DIR"
+PORT_VARIABLE = "ALPHA_HARNESS_PORT"
 #: The exe's own version, handed to the app. The in-app update replaces the wheel and never
 #: this program, so without it the app cannot tell that the exe around it is years older.
 LAUNCHER_VARIABLE = "ALPHA_HARNESS_LAUNCHER"
@@ -53,7 +55,12 @@ ACTIVE_FILE = "active-slot.txt"
 LOCK_FILE = "running.lock"
 LOG_FILE = "launcher.log"
 #: Where the app serves; kept in step with ``alpha_harness.__main__``.
-APP_PORT = 8000
+try:
+    APP_PORT = int(os.environ.get(PORT_VARIABLE, "8000"))
+except ValueError as exc:
+    raise ValueError(f"{PORT_VARIABLE} must be an integer from 1 to 65535") from exc
+if not 1 <= APP_PORT <= 65535:
+    raise ValueError(f"{PORT_VARIABLE} must be an integer from 1 to 65535")
 
 WINDOWS = sys.platform == "win32"
 MACOS = sys.platform == "darwin"
@@ -81,14 +88,18 @@ def home() -> Path:
     """Where everything the launcher owns lives. Per-user, so updating needs no elevation."""
     override = os.environ.get(HOME_VARIABLE)
     if override:
-        return Path(override)
-    if WINDOWS:
+        base = Path(override)
+    elif WINDOWS:
         base = os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local"
     elif MACOS:
         base = Path.home() / "Library" / "Application Support"
     else:
         base = os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share"
-    return Path(base) / "AlphaHarness"
+    if not override:
+        base = Path(base) / "AlphaHarness"
+    # A launcher owns a venv and update slots, so separate ports need separate launcher state
+    # as well as separate app data. The default profile keeps its existing location.
+    return base if APP_PORT == 8000 else base / "profiles" / str(APP_PORT)
 
 
 def say(root: Path, message: str) -> None:
@@ -862,6 +873,12 @@ def start(root: Path, slot: str) -> int:
         PID_VARIABLE: str(os.getpid()),
         "PYTHONUTF8": "1",
     }
+    if DATA_DIR_VARIABLE not in environment:
+        environment[DATA_DIR_VARIABLE] = (
+            str(Path.home() / ".alpha-harness")
+            if APP_PORT == 8000
+            else str(Path.home() / ".alpha-harness" / f"profile-{APP_PORT}")
+        )
     say(root, f"starting app from slot {slot}")
     with (root / LOG_FILE).open("a", encoding="utf-8") as handle:
         _child = subprocess.Popen(  # noqa: S603 - the venv this launcher built

@@ -5,6 +5,9 @@ Run with::
     uvx alpha-harness                                          # built UI included
     uv run uvicorn alpha_harness.main:app --reload --port 8000  # development, UI from Vite
 
+Choose another local profile with ``ALPHA_HARNESS_DATA_DIR`` and ``ALPHA_HARNESS_PORT``;
+when using uvicorn directly, pass that same port with ``--port``.
+
 The frontend talks to this over HTTP + WebSocket only.
 Credentials never leave the backend.
 """

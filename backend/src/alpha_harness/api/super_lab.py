@@ -72,11 +72,6 @@ def _recipe_name(name: str | None, alpha_id: str, expression_type: str) -> str:
     return f"{label} · {alpha_id[-10:]} · {expression_type}"
 
 
-def _source_name(name: str | None, alpha_id: str) -> str:
-    label = (name or "Submitted SuperAlpha").strip()[:40]
-    return f"{label} · {alpha_id[-10:]}"
-
-
 async def _submitted_expressions(endpoints: BrainEndpoints) -> SubmittedExpressions:
     selections: dict[str, tuple[str, int, list[str]]] = {}
     combos: dict[str, tuple[str, int, list[str]]] = {}
@@ -111,7 +106,7 @@ async def _submitted_expressions(endpoints: BrainEndpoints) -> SubmittedExpressi
 
         full_alphas = await asyncio.gather(*(complete(alpha) for alpha in candidates))
         for alpha in full_alphas:
-            source = _source_name(alpha.name, alpha.id)
+            source = alpha.id
             if alpha.selection and (code := alpha.selection.code):
                 if len(code) <= 2000:
                     name, count, sources = selections.get(
@@ -121,7 +116,7 @@ async def _submitted_expressions(endpoints: BrainEndpoints) -> SubmittedExpressi
                     selections[code] = (
                         name,
                         count + 1,
-                        [*sources, source] if len(sources) < 3 else sources,
+                        sources or [source],
                     )
                 else:
                     omitted += 1
@@ -134,7 +129,7 @@ async def _submitted_expressions(endpoints: BrainEndpoints) -> SubmittedExpressi
                     combos[code] = (
                         name,
                         count + 1,
-                        [*sources, source] if len(sources) < 3 else sources,
+                        sources or [source],
                     )
                 else:
                     omitted += 1

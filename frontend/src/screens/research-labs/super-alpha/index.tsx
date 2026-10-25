@@ -1,8 +1,9 @@
 /** Super Alpha Lab: SuperAlphas built from your own submitted Alphas, every pairing in one task. */
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { SearchIcon, XIcon } from 'lucide-react'
+import { CheckIcon, CopyIcon, PlusIcon, SearchIcon, XIcon } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 import type { components } from '@/api/generated'
 import { http } from '@/api/http'
 import { fmt } from '@/lib/format'
@@ -442,9 +443,7 @@ function ExpressionCatalog({
 }) {
   const query = search.trim().toLocaleLowerCase()
   const matching = recipes.filter((recipe) =>
-    [recipe.name, recipe.code, ...(recipe.sources ?? [])].some((value) =>
-      value.toLocaleLowerCase().includes(query),
-    ),
+    [recipe.code, ...recipe.sources].some((value) => value.toLocaleLowerCase().includes(query)),
   )
 
   return (
@@ -476,39 +475,50 @@ function ExpressionCatalog({
           matching.map((recipe) => {
             const isAdded = added.some((item) => item.code === recipe.code)
             const canAdd = added.length < MAX_CUSTOM_RECIPES
+            const source = recipe.sources[0]?.split(' · ').at(-1)
+            const copy = async () => {
+              const value = source ? `${recipe.code}\n// AlphaID: ${source}` : recipe.code
+              try {
+                await navigator.clipboard.writeText(value)
+                toast.success(source ? 'Copied expression and Alpha ID' : 'Copied expression')
+              } catch {
+                toast.error('Could not copy to clipboard')
+              }
+            }
             return (
               <article
                 key={recipe.code}
-                className="flex min-w-0 flex-col gap-2 rounded-sm border border-hairline bg-surface-2 p-3"
+                className="flex min-w-0 items-center gap-3 rounded-md border border-hairline bg-surface-2/50 p-2.5 transition-colors hover:bg-surface-2"
               >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <strong className="break-words text-body-compact font-medium text-ink">
-                      {recipe.name}
-                    </strong>
-                    <span className="text-caption text-ink-subtle">
-                      Used by {fmt.int(recipe.usedBy)} submitted SuperAlpha
-                      {recipe.usedBy === 1 ? '' : 's'}
-                    </span>
-                  </div>
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <code className="num whitespace-pre-wrap break-words text-body-compact text-ink">
+                    {recipe.code}
+                  </code>
+                  {source && (
+                    <code className="num break-all text-caption text-ink-subtle">{source}</code>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
                   <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={isAdded || !canAdd}
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Copy expression and Alpha ID"
+                    title="Copy expression and Alpha ID"
+                    onClick={() => void copy()}
+                  >
+                    <CopyIcon />
+                  </Button>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    disabled={!isAdded && !canAdd}
+                    aria-label={isAdded ? 'Expression added' : 'Add expression'}
+                    title={isAdded ? 'Expression added' : 'Add expression'}
                     onClick={() => onAdd(recipe)}
                   >
-                    {isAdded ? 'Added' : 'Add'}
+                    {isAdded ? <CheckIcon /> : <PlusIcon />}
                   </Button>
                 </div>
-                <code className="num max-h-24 overflow-y-auto whitespace-pre-wrap break-all rounded-xs bg-surface-1 p-2 text-caption text-ink-muted">
-                  {recipe.code}
-                </code>
-                {recipe.sources.length > 0 && (
-                  <p className="text-caption text-ink-subtle">
-                    Examples: {recipe.sources.join(' · ')}
-                    {recipe.usedBy > recipe.sources.length ? ' · and others' : ''}
-                  </p>
-                )}
               </article>
             )
           })

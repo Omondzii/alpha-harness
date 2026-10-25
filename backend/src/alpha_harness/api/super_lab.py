@@ -1,10 +1,14 @@
 """Super Alpha Lab: one form, one task of SuperAlphas from your own submitted Alphas."""
 
+import asyncio
 from typing import Literal
 
 from fastapi import APIRouter
 from pydantic import Field
 
+from ..brain.endpoints import BrainEndpoints
+from ..brain.filters import AlphaQuery, Filter
+from ..brain.schemas import Alpha, SimulationType
 from ..db.models import utcnow
 from ..engine.packer import MAX_BATCH
 from ..labs import super_alpha
@@ -18,6 +22,8 @@ router = APIRouter(prefix="/api/super-lab", tags=["super-lab"])
 #: BRAIN runs at most three SuperAlpha simulations per person at once.
 MAX_CORES = 3
 MAX_CUSTOM_RECIPES = 5
+ALPHA_PAGE_SIZE = 100
+MAX_ALPHA_OFFSET = 1_000
 
 
 class Recipe(Out):
@@ -45,6 +51,97 @@ class SuperPlan(Out):
     decays: list[int]
     truncation: float
     simulations: int
+
+
+class SubmittedExpressions(Out):
+    selections: list[Recipe]
+    combos: list[Recipe]
+    truncated: bool
+    omitted: int
+
+
+def _recipe_name(name: str | None, alpha_id: str, expression_type: str) -> str:
+    label = (name or "Submitted SuperAlpha").strip()[:40]
+    return f"{label} · {alpha_id[-10:]} · {expression_type}"
+
+
+async def _submitted_expressions(endpoints: BrainEndpoints) -> SubmittedExpressions:
+    selections: dict[str, Recipe] = {}
+    combos: dict[str, Recipe] = {}
+    offset = 0
+    truncated = False
+    omitted = 0
+    semaphore = asyncio.Semaphore(4)
+
+    while True:
+        page = await endpoints.list_alphas(
+            AlphaQuery(
+                limit=ALPHA_PAGE_SIZE,
+                offset=offset,
+                order="-dateSubmitted",
+                filters=[
+                    Filter("status", "!=", "UNSUBMITTED"),
+                    Filter("type", "=", "SUPER"),
+                ],
+                hidden=None,
+            )
+        )
+        results = page["results"]
+        total = page["count"]
+        candidates = [Alpha.model_validate(row) for row in results]
+        candidates = [alpha for alpha in candidates if alpha.type == SimulationType.SUPER]
+
+        async def complete(alpha: Alpha) -> Alpha:
+            if alpha.selection and alpha.selection.code and alpha.combo and alpha.combo.code:
+                return alpha
+            async with semaphore:
+                return await endpoints.get_alpha(alpha.id)
+
+        full_alphas = await asyncio.gather(*(complete(alpha) for alpha in candidates))
+        for alpha in full_alphas:
+            title = alpha.name
+            if alpha.selection and (code := alpha.selection.code):
+                if len(code) <= 2000:
+                    selections.setdefault(
+                        code,
+                        Recipe(
+                            name=_recipe_name(title, alpha.id, "selection"),
+                            code=code,
+                        ),
+                    )
+                else:
+                    omitted += 1
+            if alpha.combo and (code := alpha.combo.code):
+                if len(code) <= 2000:
+                    combos.setdefault(
+                        code,
+                        Recipe(
+                            name=_recipe_name(title, alpha.id, "combo"),
+                            code=code,
+                        ),
+                    )
+                else:
+                    omitted += 1
+
+        if len(results) < ALPHA_PAGE_SIZE or offset + len(results) >= total:
+            break
+        if offset >= MAX_ALPHA_OFFSET:
+            truncated = True
+            break
+        offset += ALPHA_PAGE_SIZE
+
+    return SubmittedExpressions(
+        selections=list(selections.values()),
+        combos=list(combos.values()),
+        truncated=truncated,
+        omitted=omitted,
+    )
+
+
+@router.get("/submitted-expressions")
+async def submitted_expressions(state: State) -> SubmittedExpressions:
+    """Read selection and combo recipes from the user's submitted SuperAlphas."""
+    return await _submitted_expressions(state.endpoints)
 
 
 def _activations(choice: str) -> list[str]:

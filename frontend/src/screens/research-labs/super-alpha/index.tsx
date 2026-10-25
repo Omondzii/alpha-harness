@@ -53,6 +53,8 @@ export function SuperAlphaLabScreen() {
   const [comboCode, setComboCode] = useState('')
   const [customSelections, setCustomSelections] = useState<Schemas['Recipe'][]>([])
   const [customCombos, setCustomCombos] = useState<Schemas['Recipe'][]>([])
+  const [submittedSelection, setSubmittedSelection] = useState('')
+  const [submittedCombo, setSubmittedCombo] = useState('')
 
   // BRAIN's own list for the market; Subindustry first where it has one, as most Alphas use it.
   const neutralization = options.neutralizations.some((n) => n.value === picked)
@@ -83,8 +85,20 @@ export function SuperAlphaLabScreen() {
       }),
     placeholderData: keepPreviousData,
   })
+  const submitted = useQuery({
+    queryKey: ['super-lab', 'submitted-expressions'],
+    queryFn: () =>
+      http.get<Schemas['SubmittedExpressions']>('/api/super-lab/submitted-expressions'),
+    enabled: false,
+  })
   const add = useAddTask(() => http.post<Schemas['AddedTask']>('/api/super-lab/tasks', body))
   const ready = !agnostic && limitValid && options.ready && neutralization !== ''
+  const importedSelection = submitted.data?.selections.find(
+    (recipe) => recipe.code === submittedSelection,
+  )
+  const importedCombo = submitted.data?.combos.find((recipe) => recipe.code === submittedCombo)
+  const selectionAdded = customSelections.some((recipe) => recipe.code === importedSelection?.code)
+  const comboAdded = customCombos.some((recipe) => recipe.code === importedCombo?.code)
 
   return (
     <Page>
@@ -115,6 +129,117 @@ export function SuperAlphaLabScreen() {
             />
           </Field>
         </div>
+      </Panel>
+
+      <Panel
+        title="Submitted expressions"
+        description="Load selection and combo expressions from your submitted SuperAlphas, then add either one independently to this simulation task."
+        actions={
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={submitted.isFetching}
+            onClick={() => void submitted.refetch()}
+          >
+            {submitted.data ? 'Refresh expressions' : 'Load expressions'}
+          </Button>
+        }
+      >
+        {submitted.isError && (
+          <ErrorNotice error={submitted.error} title="Could not load submitted expressions" />
+        )}
+        {submitted.data && (
+          <div className="flex flex-col gap-4">
+            {submitted.data.omitted > 0 && (
+              <Notice
+                tone="info"
+                title={`${submitted.data.omitted} submitted expression${submitted.data.omitted === 1 ? '' : 's'} exceeded the 2,000-character limit and could not be imported.`}
+              />
+            )}
+            {submitted.data.truncated && (
+              <Notice
+                tone="info"
+                title="Only the newest submitted SuperAlphas were loaded because BRAIN limits how far this list can be paged."
+              />
+            )}
+            {submitted.data.selections.length === 0 && submitted.data.combos.length === 0 && (
+              <Notice
+                tone="info"
+                title="No submitted SuperAlpha selection or combo expressions were found."
+              />
+            )}
+            <div className="grid gap-6 lg:grid-cols-2">
+              <section className="flex min-w-0 flex-col items-start gap-3">
+                <Field label="Submitted selection expression" className="w-full">
+                  <Select
+                    label="Submitted selection expression"
+                    items={submitted.data.selections.map((recipe) => ({
+                      value: recipe.code,
+                      label: recipe.name,
+                    }))}
+                    value={submittedSelection || null}
+                    onChange={setSubmittedSelection}
+                    className="w-full"
+                    disabled={submitted.data.selections.length === 0}
+                  />
+                </Field>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={
+                    !importedSelection ||
+                    selectionAdded ||
+                    customSelections.length >= MAX_CUSTOM_RECIPES
+                  }
+                  onClick={() => {
+                    if (!importedSelection) return
+                    setCustomSelections((current) =>
+                      current.some((recipe) => recipe.code === importedSelection.code) ||
+                      current.length >= MAX_CUSTOM_RECIPES
+                        ? current
+                        : [...current, importedSelection],
+                    )
+                  }}
+                >
+                  {selectionAdded ? 'Selection added' : 'Add selected selection'}
+                </Button>
+              </section>
+              <section className="flex min-w-0 flex-col items-start gap-3">
+                <Field label="Submitted combo expression" className="w-full">
+                  <Select
+                    label="Submitted combo expression"
+                    items={submitted.data.combos.map((recipe) => ({
+                      value: recipe.code,
+                      label: recipe.name,
+                    }))}
+                    value={submittedCombo || null}
+                    onChange={setSubmittedCombo}
+                    className="w-full"
+                    disabled={submitted.data.combos.length === 0}
+                  />
+                </Field>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={
+                    !importedCombo || comboAdded || customCombos.length >= MAX_CUSTOM_RECIPES
+                  }
+                  onClick={() => {
+                    if (!importedCombo) return
+                    setCustomCombos((current) =>
+                      current.some((recipe) => recipe.code === importedCombo.code) ||
+                      current.length >= MAX_CUSTOM_RECIPES
+                        ? current
+                        : [...current, importedCombo],
+                    )
+                  }}
+                >
+                  {comboAdded ? 'Combo added' : 'Add selected combo'}
+                </Button>
+              </section>
+            </div>
+          </div>
+        )}
       </Panel>
 
       <Panel

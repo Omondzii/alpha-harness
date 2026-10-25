@@ -1605,6 +1605,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/super-lab/submitted-expressions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Submitted Expressions
+         * @description Read selection and combo recipes from the user's submitted SuperAlphas.
+         */
+        get: operations["submitted_expressions_api_super_lab_submitted_expressions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/super-lab/tasks": {
         parameters: {
             query?: never;
@@ -4830,6 +4850,17 @@ export interface components {
             /** Unvalidated */
             unvalidated: number;
         };
+        /** SubmittedExpressions */
+        SubmittedExpressions: {
+            /** Combos */
+            combos: components["schemas"]["Recipe"][];
+            /** Omitted */
+            omitted: number;
+            /** Selections */
+            selections: components["schemas"]["Recipe"][];
+            /** Truncated */
+            truncated: boolean;
+        };
         /** SubmittedRequest */
         SubmittedRequest: {
             /** Alphaid */
@@ -7934,6 +7965,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submitted_expressions_api_super_lab_submitted_expressions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmittedExpressions"];
                 };
             };
         };

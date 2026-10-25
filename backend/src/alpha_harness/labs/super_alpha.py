@@ -2,11 +2,9 @@
 
 A SuperAlpha is a selection expression, ranking every submitted ``ACTIVE`` Alpha of the
 region and delay and keeping the top ``selectionLimit``, and a combo expression, weighting
-the kept Alphas each day. Nothing here searches either expression: SuperAlpha simulations
-are slow and BRAIN runs three at a time, so the lab crosses a small library of
-economically grounded selections with proven weighting schemes for users to choose from.
-Each pairing runs at two decays to land Turnover inside the 2% to 40% a SuperAlpha must
-clear, and BRAIN's own checks say which are submittable.
+the kept Alphas each day. Users select their expressions from submitted SuperAlphas or
+provide their own. Each pairing runs at two decays to land Turnover inside the 2% to 40% a
+SuperAlpha must clear, and BRAIN's own checks say which are submittable.
 
 Every selection caps each Alpha's operators at 8,000 / limit: BRAIN warns rather than
 fails past 8,000 operators in all, and drops what does not fit.
@@ -40,60 +38,6 @@ class Recipe:
     code: str
 
 
-def selections(limit: int) -> list[Recipe]:
-    """Rankings over Alpha properties, each one keeping the pool diverse in its own way.
-
-    ``{cap}`` bounds an Alpha's operators so the kept ones never pass 8,000 between them.
-    Products of gates and scores: a gate that fails scores 0, which ``POSITIVE`` drops.
-    """
-    cap = OPERATOR_LIMIT // max(limit, MIN_SELECTION)
-    budget = f"(operator_count <= {cap})"
-    return [
-        Recipe(
-            "Least correlated",
-            f"{budget} * (self_correlation < 0.7) * (1 - prod_correlation)",
-        ),
-        Recipe(
-            "Tradeable turnover",
-            f"{budget} * (turnover >= 0.02) * (turnover < 0.35) * (1 - self_correlation)",
-        ),
-        Recipe(
-            "Broad books",
-            f"{budget} * (long_count + short_count) / sqrt(universe_size(universe))",
-        ),
-        Recipe(
-            "Slow core",
-            f"{budget} * (turnover < 0.25) / (turnover + 0.05)",
-        ),
-        Recipe(
-            "Many sources",
-            f"{budget} * (1 + datacategory_count) * (1 - prod_correlation)",
-        ),
-    ]
-
-
-#: Weighting schemes from BRAIN's own combo examples and their risk-aware variants.
-COMBOS = [
-    Recipe("Equal weight", "1"),
-    Recipe(
-        "Rolling IR",
-        "stats = generate_stats(alpha);\nmax(ts_ir(stats.returns, 250), 0)",
-    ),
-    Recipe(
-        "Least crowded",
-        "stats = generate_stats(alpha);\n"
-        "innerCorr = self_corr(stats.returns, 500);\n"
-        "ic = if_else(innerCorr == 1.0, nan, innerCorr);\n"
-        "maxCorr = reduce_max(ic);\n"
-        "max(1 - maxCorr, 0.05)",
-    ),
-    Recipe(
-        "Inverse volatility",
-        "stats = generate_stats(alpha);\n1 / (ts_std_dev(stats.returns, 120) + 0.0001)",
-    ),
-]
-
-
 @dataclass(frozen=True, slots=True)
 class Candidate:
     selection: Recipe
@@ -113,18 +57,14 @@ def candidates(
     neutralization: str,
     selection_limit: int,
     activations: list[str],
-    selection_recipes: list[Recipe] | None = None,
-    combo_recipes: list[Recipe] | None = None,
+    selection_recipes: list[Recipe],
+    combo_recipes: list[Recipe],
 ) -> list[Candidate]:
     """Every selection · combo · decay · activation, as Full SUPER simulations.
 
     Full mode always: only a Full simulation can be submitted, and Quick runs none of the
     correlation checks a SuperAlpha must also pass.
     """
-    selection_recipes = (
-        selections(selection_limit) if selection_recipes is None else selection_recipes
-    )
-    combo_recipes = COMBOS if combo_recipes is None else combo_recipes
     out: list[Candidate] = []
     for activation in activations:
         for decay in DECAYS:
@@ -197,15 +137,18 @@ if __name__ == "__main__":
         neutralization="SUBINDUSTRY",
         selection_limit=limit,
         activations=["IS", "OS"],
+        selection_recipes=[Recipe("Sample selection", "(operator_count <= 200)")],
+        combo_recipes=[Recipe("Sample combo", "1")],
     )
     trials = seed_trials(found)(1)
     wires = [c.request.to_wire() for c in found]
     checks = {
-        "every pairing at every decay and activation": len(found)
-        == len(selections(limit)) * len(COMBOS) * len(DECAYS) * 2,
+        "every pairing at every decay and activation": len(found) == len(DECAYS) * 2,
         "no two alike": len({request_hash(c.request) for c in found}) == len(found),
         "operators capped at 8,000 / limit": all(
-            f"(operator_count <= {OPERATOR_LIMIT // limit})" in r.code for r in selections(limit)
+            c.request.selection is not None
+            and f"(operator_count <= {OPERATOR_LIMIT // limit})" in c.request.selection
+            for c in found
         ),
         "SUPER, Full, Positive, as asked": all(
             w["type"] == "SUPER"

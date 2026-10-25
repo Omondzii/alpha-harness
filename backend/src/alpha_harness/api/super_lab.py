@@ -40,8 +40,6 @@ class SuperTask(Out):
     #: ``BOTH`` runs every pairing under each Component Activation.
     activation: Literal["IS", "OS", "BOTH"] = "BOTH"
     cores: int = Field(default=MAX_CORES, ge=1, le=MAX_CORES)
-    builtin_selections: list[str] = Field(default_factory=list, max_length=5)
-    builtin_combos: list[str] = Field(default_factory=list, max_length=4)
     custom_selections: list[Recipe] = Field(default_factory=list, max_length=MAX_CUSTOM_RECIPES)
     custom_combos: list[Recipe] = Field(default_factory=list, max_length=MAX_CUSTOM_RECIPES)
     run: bool = False
@@ -50,8 +48,6 @@ class SuperTask(Out):
 class SuperPlan(Out):
     selections: list[Recipe]
     combos: list[Recipe]
-    builtin_selections: list[Recipe]
-    builtin_combos: list[Recipe]
     decays: list[int]
     truncation: float
     simulations: int
@@ -174,22 +170,9 @@ def _activations(choice: str) -> list[str]:
     return ["IS", "OS"] if choice == "BOTH" else [choice]
 
 
-def _selected_builtins(
-    requested: list[str], available: list[super_alpha.Recipe], kind: str
-) -> list[super_alpha.Recipe]:
-    by_name = {recipe.name: recipe for recipe in available}
-    if len(requested) != len(set(requested)) or any(name not in by_name for name in requested):
-        raise refuse(
-            422, "invalid_builtin_expression", f"One or more {kind} expressions are invalid."
-        )
-    return [by_name[name] for name in requested]
-
-
 def _recipes(body: SuperTask) -> tuple[list[super_alpha.Recipe], list[super_alpha.Recipe]]:
-    selections = _selected_builtins(
-        body.builtin_selections, super_alpha.selections(body.selection_limit), "selection"
-    )
-    combos = _selected_builtins(body.builtin_combos, super_alpha.COMBOS, "combo")
+    selections: list[super_alpha.Recipe] = []
+    combos: list[super_alpha.Recipe] = []
     cap = super_alpha.OPERATOR_LIMIT // body.selection_limit
     for index, recipe in enumerate(body.custom_selections, 1):
         selections.append(
@@ -213,10 +196,6 @@ async def plan(body: SuperTask) -> SuperPlan:
     return SuperPlan(
         selections=[Recipe(name=r.name, code=r.code) for r in selections],
         combos=[Recipe(name=r.name, code=r.code) for r in combos],
-        builtin_selections=[
-            Recipe(name=r.name, code=r.code) for r in super_alpha.selections(body.selection_limit)
-        ],
-        builtin_combos=[Recipe(name=r.name, code=r.code) for r in super_alpha.COMBOS],
         decays=list(super_alpha.DECAYS),
         truncation=super_alpha.TRUNCATION,
         simulations=len(selections) * len(combos) * len(super_alpha.DECAYS) * len(activations),
@@ -261,7 +240,7 @@ async def add_task(body: SuperTask, state: State) -> AddedTask:
         ),
         simulations=len(found),
         batch_size=body.cores * MAX_BATCH,
-        template_source=super_alpha.COMBOS[0].code,
+        template_source=combos[0].code,
         template_name=f"Super Alpha Lab · {body.region} D{body.delay} {body.universe}",
         run=body.run,
         seeds=super_alpha.seed_trials(found),

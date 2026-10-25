@@ -21,25 +21,28 @@ uv run alpha-harness
 npm run dev
 ```
 
-To run another account, prefix both commands with the same profile name. For example, account 2:
+To run another account, prefix both commands with the same profile name. Use lowercase letters,
+numbers, and internal hyphens, up to 32 characters. For example, a named account:
 
 ```bash
 # From backend/
-ALPHA_HARNESS_PROFILE=acc2 uv run alpha-harness
+ALPHA_HARNESS_PROFILE=john uv run alpha-harness
 
 # From frontend/
-ALPHA_HARNESS_PROFILE=acc2 npm run dev
+ALPHA_HARNESS_PROFILE=john npm run dev
 ```
 
-Use `acc3`, `acc4`, and so on for additional accounts. Each profile gets its own data directory
-and matching backend/frontend ports: the default uses `~/.alpha-harness`, backend port 8000,
-and frontend port 5173; `acc2` uses `~/.alpha-harness/acc2`, backend port 8002, and frontend
-port 5175. Open the Vite URL (for example, `http://localhost:5175` for `acc2`) in the
-corresponding browser profile.
+Each profile gets its own data directory and matching backend/frontend ports. The default uses
+`~/.alpha-harness`, backend port 8000, and frontend port 5173. `john` uses
+`~/.alpha-harness/john` and gets a stable port pair derived from its name. Numbered profiles
+such as `acc2` keep their familiar ports 8002 and 5175. Open the Vite URL printed when it starts
+in the corresponding browser profile.
 
 The profile automatically keeps the Vite proxy and the backend WebSocket origin check paired.
-To override the automatic settings, set `ALPHA_HARNESS_DATA_DIR`, `ALPHA_HARNESS_PORT`, or
-`ALPHA_HARNESS_FRONTEND_PORT` explicitly.
+Named profile ports are derived consistently by the backend and Vite. If a derived port is
+already in use, startup fails rather than silently choosing a different port; choose another
+name or set `ALPHA_HARNESS_PORT` and/or `ALPHA_HARNESS_FRONTEND_PORT` to available ports.
+You can also override the data location with `ALPHA_HARNESS_DATA_DIR`.
 
 Do not run multiple accounts with the same data directory: the catalog is single-writer. Each
 backend also runs its own background sync and session checks, so many concurrent accounts use

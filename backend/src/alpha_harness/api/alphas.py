@@ -1,9 +1,9 @@
-"""The alpha pool on BRAIN: summary, the Alpha page, check, correlate, edit properties.
+"""The alpha pool on BRAIN: summary, the Alpha page, check, submit, correlate, edit properties.
 
-**There is no submit endpoint, deliberately.** Submitting an alpha is irreversible, so the
-guard against doing it by accident is that no route, service or client wrapper for it
-exists. Correlations are slow, rate-limited jobs, so their answers are kept in
-``brain_cache`` until the user refreshes.
+Submission is irreversible. Its route is called only after explicit UI confirmation and
+checks current platform status before sending a single, non-retried request.
+Correlations are slow, rate-limited jobs, so their answers are kept in ``brain_cache`` until
+the user refreshes.
 """
 
 import asyncio
@@ -15,7 +15,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field, RootModel
 from sqlalchemy import delete, func, select
 
-from ..brain.errors import BrainError
+from ..brain.errors import BrainError, BrainPollTimeout, BrainServerError, BrainTransportError
 from ..db.models import BrainCache, SimulationRecord, Study, Trial, TrialState, utcnow
 from ..labs.fastexpr import ParseError, data_fields, operator_count, operator_names, parse
 from ..labs.params import TASK_SAMPLERS
@@ -28,7 +28,7 @@ from ..vault.yields import (
     verdict,
     without_quota_checks,
 )
-from .deps import State
+from .deps import State, refuse
 from .portfolio import PortfolioResult
 
 router = APIRouter(prefix="/api/alphas", tags=["alphas"])
@@ -42,6 +42,11 @@ CachedOnly = Annotated[
 
 class BrainPayload(RootModel[dict[str, Any]]):
     """BRAIN's own JSON, passed through as the platform sent it."""
+
+
+class SubmissionAccepted(Out):
+    alpha_id: str
+    accepted: bool
 
 
 class AlphaStats(Out):
@@ -497,6 +502,54 @@ async def update_properties(alpha_id: str, body: AlphaProperties, state: State) 
     await _store(state, f"alpha:{alpha_id}", updated)
     await state.alphas.save_color(alpha_id, updated.get("color"))
     return _info(alpha_id, updated)
+
+
+@router.post("/{alpha_id}/submit")
+async def submit_alpha(alpha_id: str, state: State) -> SubmissionAccepted:
+    """Submit one currently unsubmitted, full-mode Alpha to BRAIN.
+
+    The platform is authoritative about its checks. The fresh read here prevents submitting
+    something already submitted or a Quick-mode Alpha; the POST itself is deliberately never
+    retried because its outcome may be irreversible.
+    """
+    current = await state.endpoints.alpha_body(alpha_id)
+    if current.get("status") != "UNSUBMITTED" or current.get("dateSubmitted"):
+        raise refuse(409, "alpha_not_unsubmitted", "This Alpha is no longer unsubmitted.")
+    settings = current.get("settings")
+    if isinstance(settings, dict) and settings.get("simulationMode") == "QUICK":
+        raise refuse(
+            409,
+            "quick_mode_not_submittable",
+            "Quick-mode Alphas cannot be submitted. Run this Alpha in full mode first.",
+        )
+
+    try:
+        await state.endpoints.submit_alpha(alpha_id)
+    except BrainTransportError as exc:
+        if exc.maybe_delivered:
+            raise refuse(
+                409,
+                "submission_status_unknown",
+                "BRAIN may have accepted this submission, but its response was not received. "
+                "Check the Alpha on BRAIN before trying again.",
+            ) from exc
+        raise
+    except BrainServerError as exc:
+        raise refuse(
+            409,
+            "submission_status_unknown",
+            "BRAIN may have accepted this submission, but returned a server error. "
+            "Check the Alpha on BRAIN before trying again.",
+        ) from exc
+    except BrainPollTimeout as exc:
+        raise refuse(
+            409,
+            "submission_status_unknown",
+            "BRAIN is still processing this submission. Check the Alpha on BRAIN before trying "
+            "again.",
+        ) from exc
+
+    return SubmissionAccepted(alpha_id=alpha_id, accepted=True)
 
 
 @router.get("/{alpha_id}/check")

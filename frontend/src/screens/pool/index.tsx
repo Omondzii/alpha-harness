@@ -1,6 +1,6 @@
 /**
- * Alphas (spec §4.5): everything stored locally, and what is submittable. Submission stays
- * on BRAIN: this screen links there and never submits.
+ * Alphas (spec §4.5): everything stored locally, and what is submittable. Submission is sent
+ * to BRAIN from an Alpha's detail sheet after confirmation.
  */
 
 import { Link, useParams } from '@tanstack/react-router'

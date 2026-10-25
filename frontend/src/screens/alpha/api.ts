@@ -1,7 +1,7 @@
 /**
  * The Alpha page's contract. Correlations and the performance comparison spend BRAIN's
  * hourly budgets, so they run on a click and come back cached with `fetchedAt`; only
- * `refresh` asks BRAIN again. Nothing here submits an Alpha.
+ * `refresh` asks BRAIN again. Submission is exposed by the pool detail action.
  */
 
 import type { components } from '@/api/generated'

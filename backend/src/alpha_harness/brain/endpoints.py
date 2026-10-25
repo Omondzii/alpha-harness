@@ -230,6 +230,17 @@ class BrainEndpoints:
         r = await self.client.poll(f"/alphas/{alpha_id}/check")
         return r.body if isinstance(r.body, dict) else {}
 
+    async def submit_alpha(self, alpha_id: str) -> None:
+        """Submit an existing Alpha, then poll BRAIN's submission decision.
+
+        The POST is issued exactly once. BRAIN may accept it and continue checking via
+        ``GET /alphas/{id}/submit``; only that poll is safe to retry.
+        """
+        path = f"/alphas/{alpha_id}/submit"
+        response = await self.client.request("POST", path)
+        if response.status in {201, 202} or response.pending:
+            await self.client.poll(path)
+
     async def correlations(self, alpha_id: str, kind: str = "self") -> dict[str, Any]:
         """``self`` or ``prod`` correlation. Asynchronous.
 
@@ -268,8 +279,8 @@ class BrainEndpoints:
     # params dict — a dict helper encodes the operator into the value and the server then
     # matches nothing.
     #
-    # There is deliberately no ``submit`` here: submission is irreversible, and the absence
-    # of the method is the guarantee that no code path reaches it by mistake.
+    # Submission is kept separate from metadata edits: it is irreversible and must never be
+    # folded into an ordinary update.
 
     async def list_alphas(self, query: AlphaQuery) -> dict[str, Any]:
         """One page of your alphas, with the total match count."""

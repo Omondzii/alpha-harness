@@ -154,7 +154,7 @@ export function SuperAlphaLabScreen() {
             {expressionTab === 'submitted' && (
               <Button
                 size="sm"
-                variant="secondary"
+                variant="primary"
                 loading={submitted.isFetching}
                 onClick={() => void submitted.refetch()}
               >

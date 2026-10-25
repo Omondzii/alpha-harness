@@ -554,9 +554,7 @@ function extensions(live: { current: Live }, label: string, maxLength?: number) 
     dropCursor(),
     ...(maxLength === undefined
       ? []
-      : [
-          EditorState.transactionFilter.of((transaction) => transaction.newDoc.length <= maxLength),
-        ]),
+      : [EditorState.changeFilter.of((transaction) => transaction.newDoc.length <= maxLength)]),
     EditorState.allowMultipleSelections.of(true),
     indentOnInput(),
     fastExpression,

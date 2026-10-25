@@ -266,8 +266,9 @@ export function SuperAlphaLabScreen() {
               />
             </div>
             <Button
-              size="sm"
-              variant="secondary"
+              size="md"
+              variant="primary"
+              className="mt-1"
               disabled={
                 !(customExpressionType === 'selection' ? selectionCode : comboCode).trim() ||
                 (customExpressionType === 'selection'
@@ -315,12 +316,12 @@ export function SuperAlphaLabScreen() {
             )}
           </section>
         )}
-        {(!hasSelection || !hasCombo) && (
+        {!hasSelection || !hasCombo ? (
           <Notice
-            tone="info"
+            tone="error"
             title="Add at least one selection expression and one combo expression to create a task."
           />
-        )}
+        ) : null}
       </Panel>
 
       <Panel

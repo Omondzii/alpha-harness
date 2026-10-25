@@ -106,7 +106,6 @@ export function SuperAlphaLabScreen() {
   const templateOptions = useQuery({
     queryKey: ['template-lab', 'options'],
     queryFn: () => templateLab.options(),
-    enabled: expressionTab === 'custom',
     staleTime: 5 * 60_000,
   })
   const add = useAddTask(() => http.post<Schemas['AddedTask']>('/api/super-lab/tasks', body))
@@ -129,7 +128,7 @@ export function SuperAlphaLabScreen() {
         title="Market"
         description="Only your submitted ACTIVE Alphas of this region and delay can be selected."
       >
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-end gap-4">
           <ScopePicker scope={scope} onChange={setScope} />
           {agnostic && (
             <Notice
@@ -137,7 +136,7 @@ export function SuperAlphaLabScreen() {
               title="A SuperAlpha combines Alphas of one region. Pick a region other than All Regions."
             />
           )}
-          <Field label="Neutralization" className="max-w-xs">
+          <Field label="Neutralization" className="min-w-56 max-w-xs">
             <Select
               label="Neutralization"
               items={options.neutralizations}
@@ -171,67 +170,66 @@ export function SuperAlphaLabScreen() {
           </div>
         }
       >
-        {expressionTab === 'submitted' ? (
-          <>
-            {submitted.isError && (
-              <ErrorNotice error={submitted.error} title="Could not load submitted expressions" />
-            )}
-            {submitted.data && (
-              <div className="flex flex-col gap-4">
-                {submitted.data.omitted > 0 && (
-                  <Notice
-                    tone="info"
-                    title={`${submitted.data.omitted} submitted expression${submitted.data.omitted === 1 ? '' : 's'} exceeded the 2,000-character limit and could not be imported.`}
-                  />
-                )}
-                {submitted.data.truncated && (
-                  <Notice
-                    tone="info"
-                    title="Only the newest submitted SuperAlphas were loaded because BRAIN limits how far this list can be paged."
-                  />
-                )}
-                {submitted.data.selections.length === 0 && submitted.data.combos.length === 0 && (
-                  <Notice
-                    tone="info"
-                    title="No submitted SuperAlpha selection or combo expressions were found."
-                  />
-                )}
-              </div>
-            )}
-            <div className="grid gap-6 lg:grid-cols-2">
-              <ExpressionCatalog
-                title="Selection expressions"
-                recipes={selectionExpressions}
-                search={selectionSearch}
-                onSearch={setSelectionSearch}
-                added={customSelections}
-                onAdd={(recipe) =>
-                  setCustomSelections((current) =>
-                    current.some((item) => item.code === recipe.code) ||
-                    current.length >= MAX_CUSTOM_RECIPES
-                      ? current
-                      : [...current, { name: recipe.name, code: recipe.code }],
-                  )
-                }
-              />
-              <ExpressionCatalog
-                title="Combo expressions"
-                recipes={comboExpressions}
-                search={comboSearch}
-                onSearch={setComboSearch}
-                added={customCombos}
-                onAdd={(recipe) =>
-                  setCustomCombos((current) =>
-                    current.some((item) => item.code === recipe.code) ||
-                    current.length >= MAX_CUSTOM_RECIPES
-                      ? current
-                      : [...current, { name: recipe.name, code: recipe.code }],
-                  )
-                }
-              />
+        <div className={expressionTab === 'submitted' ? 'contents' : 'hidden'}>
+          {submitted.isError && (
+            <ErrorNotice error={submitted.error} title="Could not load submitted expressions" />
+          )}
+          {submitted.data && (
+            <div className="flex flex-col gap-4">
+              {submitted.data.omitted > 0 && (
+                <Notice
+                  tone="info"
+                  title={`${submitted.data.omitted} submitted expression${submitted.data.omitted === 1 ? '' : 's'} exceeded the 2,000-character limit and could not be imported.`}
+                />
+              )}
+              {submitted.data.truncated && (
+                <Notice
+                  tone="info"
+                  title="Only the newest submitted SuperAlphas were loaded because BRAIN limits how far this list can be paged."
+                />
+              )}
+              {submitted.data.selections.length === 0 && submitted.data.combos.length === 0 && (
+                <Notice
+                  tone="info"
+                  title="No submitted SuperAlpha selection or combo expressions were found."
+                />
+              )}
             </div>
-          </>
-        ) : (
+          )}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <ExpressionCatalog
+              title="Selection expressions"
+              recipes={selectionExpressions}
+              search={selectionSearch}
+              onSearch={setSelectionSearch}
+              added={customSelections}
+              onAdd={(recipe) =>
+                setCustomSelections((current) =>
+                  current.some((item) => item.code === recipe.code) ||
+                  current.length >= MAX_CUSTOM_RECIPES
+                    ? current
+                    : [...current, { name: recipe.name, code: recipe.code }],
+                )
+              }
+            />
+            <ExpressionCatalog
+              title="Combo expressions"
+              recipes={comboExpressions}
+              search={comboSearch}
+              onSearch={setComboSearch}
+              added={customCombos}
+              onAdd={(recipe) =>
+                setCustomCombos((current) =>
+                  current.some((item) => item.code === recipe.code) ||
+                  current.length >= MAX_CUSTOM_RECIPES
+                    ? current
+                    : [...current, { name: recipe.name, code: recipe.code }],
+                )
+              }
+            />
+          </div>
+        </div>
+        <div className={expressionTab === 'custom' ? 'contents' : 'hidden'}>
           <section className="flex min-w-0 flex-col items-start gap-3">
             <Segmented
               label="Custom expression type"
@@ -315,7 +313,7 @@ export function SuperAlphaLabScreen() {
               />
             )}
           </section>
-        )}
+        </div>
         {!hasSelection || !hasCombo ? (
           <Notice
             tone="error"
@@ -440,7 +438,7 @@ function ExpressionCatalog({
           disabled={recipes.length === 0}
         />
       </div>
-      <div className="flex max-h-[28rem] min-h-24 flex-col gap-2 overflow-y-auto pr-1">
+      <div className="flex max-h-[18rem] min-h-24 flex-col gap-2 overflow-y-auto pr-1">
         {recipes.length === 0 ? (
           <p className="py-3 text-body-compact text-ink-subtle">No expressions available.</p>
         ) : matching.length === 0 ? (
@@ -476,6 +474,7 @@ function ExpressionCatalog({
                   <Button
                     size="icon-sm"
                     variant="ghost"
+                    className="bg-surface-3/70 text-ink-subtle transition-all duration-150 hover:-translate-y-0.5 hover:bg-primary-subtle hover:text-ink active:translate-y-0 active:scale-95"
                     aria-label="Copy expression and Alpha ID"
                     title="Copy expression and Alpha ID"
                     onClick={() => void copy()}
@@ -485,6 +484,7 @@ function ExpressionCatalog({
                   <Button
                     size="icon-sm"
                     variant="ghost"
+                    className={`bg-surface-3/70 transition-all duration-150 hover:-translate-y-0.5 hover:bg-primary-subtle hover:text-ink active:translate-y-0 active:scale-95 ${isAdded ? 'text-pnl-positive-text' : 'text-ink-subtle'}`}
                     disabled={!isAdded && !canAdd}
                     aria-label={isAdded ? 'Expression added' : 'Add expression'}
                     title={isAdded ? 'Expression added' : 'Add expression'}

@@ -294,7 +294,10 @@ export function PyramidsScreen() {
                             navigate({
                               to: '/pool/$tab',
                               params: { tab: 'stored' },
-                              search: { pyramids: [category.name] },
+                                search: {
+                                  pyramids: [category.name],
+                                  pyramidIds: [category.id],
+                                },
                             })
                           }}
                         >

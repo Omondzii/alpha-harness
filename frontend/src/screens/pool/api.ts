@@ -17,7 +17,7 @@ export type AlphaMetricKey =
   | 'margin'
   | 'operator_count'
   | 'calmar'
-export type AlphaSortKey = AlphaMetricKey | 'date_created' | 'date_submitted'
+export type AlphaSortKey = AlphaMetricKey | 'date_created' | 'date_submitted' | 'region'
 
 export interface AlphaPageRequest {
   submitted?: boolean

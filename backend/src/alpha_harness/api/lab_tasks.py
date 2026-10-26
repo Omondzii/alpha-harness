@@ -15,7 +15,7 @@ from typing import Annotated, Any, Literal
 import structlog
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import String, case, cast, func, or_, select, update
 
 from ..brain.errors import BrainError, BrainRateLimited
 from ..db.models import (
@@ -738,17 +738,40 @@ async def top(
 ) -> list[RankedAlpha]:
     """The task's best Alphas on what it searches for. Seeds are not among them."""
     await _one(state, task_id)  # 404 for an unknown task
+    value = func.json_extract(Trial.values, "$[0]")
+    # A task can have many free cache hits for the same Alpha. Rank each Alpha's trials
+    # before applying the result limit, keeping its best one; trials without an Alpha remain
+    # separate so failed/missing results are not collapsed together.
+    identity = case(
+        (Trial.alpha_id.is_(None), cast(Trial.id, String)),
+        else_=Trial.alpha_id,
+    )
+    ranked_trials = (
+        select(
+            Trial.id.label("id"),
+            value.label("value"),
+            func.row_number()
+            .over(
+                partition_by=(Trial.alpha_id.is_(None), identity),
+                order_by=(value.desc(), Trial.number.asc()),
+            )
+            .label("alpha_rank"),
+        )
+        .where(
+            Trial.study_id == task_id,
+            Trial.state == TrialState.COMPLETE,
+            or_(Trial.generation.is_(None), Trial.generation != 0),
+        )
+        .subquery()
+    )
     async with state.db.session() as session:
         best = list(
             (
                 await session.scalars(
                     select(Trial)
-                    .where(
-                        Trial.study_id == task_id,
-                        Trial.state == TrialState.COMPLETE,
-                        or_(Trial.generation.is_(None), Trial.generation != 0),
-                    )
-                    .order_by(func.json_extract(Trial.values, "$[0]").desc())
+                    .join(ranked_trials, ranked_trials.c.id == Trial.id)
+                    .where(ranked_trials.c.alpha_rank == 1)
+                    .order_by(ranked_trials.c.value.desc(), Trial.number.asc())
                     .limit(limit)
                 )
             ).all()

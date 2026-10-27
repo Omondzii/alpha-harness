@@ -4,15 +4,20 @@ import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { CheckIcon, CopyIcon, PlusIcon, SearchIcon, XIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { catalog } from '@/api/catalog'
 import type { components } from '@/api/generated'
 import { http } from '@/api/http'
 import { fmt } from '@/lib/format'
-import { REGION_AGNOSTIC, useScope, useScopeOptions } from '@/lib/scope'
+import { type Choice, REGION_AGNOSTIC, useScope, useScopeOptions } from '@/lib/scope'
 import { AddTaskButtons, useAddTask } from '@/screens/research-labs/add-task'
-import { templateLab } from '@/screens/research-labs/template/api'
+import { NeutralizationPicker } from '@/screens/research-labs/neutralization'
+import { SimulationSettingsFields, testPeriodOf } from '@/screens/research-labs/simulation-settings'
+import { CoresSetting } from '@/screens/research-labs/task-settings'
+import { INVESTABILITY_LABELS, templateLab } from '@/screens/research-labs/template/api'
 import { ExpressionCode, TemplateEditor } from '@/screens/research-labs/template/editor'
 import {
   Button,
+  Chips,
   Disclosure,
   ErrorNotice,
   Field,
@@ -24,11 +29,12 @@ import {
   PageHeader,
   Panel,
   Segmented,
+  Skeleton,
 } from '@/ui/kit'
-import { Select } from '@/ui/overlay'
 import { ScopePicker } from '@/ui/scope-picker'
 
 type Schemas = components['schemas']
+type Investability = NonNullable<Schemas['SuperTask']['investability']>[number]
 type Activation = Schemas['SuperTask']['activation']
 
 const ACTIVATIONS: { value: NonNullable<Activation>; label: string }[] = [
@@ -36,10 +42,18 @@ const ACTIVATIONS: { value: NonNullable<Activation>; label: string }[] = [
   { value: 'IS', label: 'IS' },
   { value: 'OS', label: 'OS' },
 ]
-/** BRAIN runs at most three SuperAlpha simulations per person at once. */
-const CORES = [1, 2, 3].map((n) => ({ value: n, label: String(n) }))
 const MIN_LIMIT = 10
 const MAX_LIMIT = 200
+const MAX_DECAY = 512
+const MAX_TRUNCATION = 1
+const DEFAULT_DECAY = 0
+const DEFAULT_TRUNCATION = 0.08
+const UNIT_HANDLING: Choice[] = [
+  { value: 'VERIFY', label: 'Verify' },
+  { value: 'WARNING', label: 'Warning' },
+]
+const DEFAULT_TEST_YEARS = '2'
+const DEFAULT_TEST_MONTHS = '0'
 const MAX_CUSTOM_RECIPES = 5
 const EXPRESSION_TABS: { value: 'submitted' | 'custom'; label: string }[] = [
   { value: 'submitted', label: 'Submitted expressions' },
@@ -53,8 +67,18 @@ const CUSTOM_EXPRESSION_TYPES: { value: 'selection' | 'combo'; label: string }[]
 export function SuperAlphaLabScreen() {
   const [scope, setScope] = useScope('/labs/super-alpha')
   const options = useScopeOptions(scope)
-  const [picked, setPicked] = useState('')
+  const syncedScopes = useQuery({ queryKey: ['catalog', 'scopes'], queryFn: catalog.scopes })
+  const [universes, setUniverses] = useState<string[]>([])
+  const [neutralizations, setNeutralizations] = useState<string[]>([])
   const [limit, setLimit] = useState(30)
+  const [decay, setDecay] = useState(String(DEFAULT_DECAY))
+  const [truncation, setTruncation] = useState(String(DEFAULT_TRUNCATION))
+  const [pasteurization, setPasteurization] = useState<'ON' | 'OFF'>('ON')
+  const [unitHandling, setUnitHandling] = useState('VERIFY')
+  const [nanHandling, setNanHandling] = useState<'ON' | 'OFF'>('ON')
+  const [testYears, setTestYears] = useState(DEFAULT_TEST_YEARS)
+  const [testMonths, setTestMonths] = useState(DEFAULT_TEST_MONTHS)
+  const [investability, setInvestability] = useState<Investability[]>([])
   const [activation, setActivation] = useState<NonNullable<Activation>>('BOTH')
   const [cores, setCores] = useState(3)
   const [selectionCode, setSelectionCode] = useState('')
@@ -68,20 +92,51 @@ export function SuperAlphaLabScreen() {
   const [selectionSearch, setSelectionSearch] = useState('')
   const [comboSearch, setComboSearch] = useState('')
 
-  // BRAIN's own list for the market; Subindustry first where it has one, as most Alphas use it.
-  const neutralization = options.neutralizations.some((n) => n.value === picked)
-    ? picked
-    : (options.neutralizations.find((n) => n.value === 'SUBINDUSTRY')?.value ??
-      options.neutralizations[0]?.value ??
-      '')
   const agnostic = scope.region === REGION_AGNOSTIC
   const limitValid = Number.isInteger(limit) && limit >= MIN_LIMIT && limit <= MAX_LIMIT
+  const decayValue = Number(decay)
+  const truncationValue = Number(truncation)
+  const decayValid =
+    decay.trim() !== '' &&
+    Number.isInteger(decayValue) &&
+    decayValue >= 0 &&
+    decayValue <= MAX_DECAY
+  const truncationValid =
+    truncation.trim() !== '' &&
+    Number.isFinite(truncationValue) &&
+    truncationValue >= 0 &&
+    truncationValue <= MAX_TRUNCATION
+  const testYearsNumber = Number(testYears)
+  const testMonthsNumber = Number(testMonths)
+  const testPeriodValid =
+    testYears.trim() !== '' &&
+    Number.isInteger(testYearsNumber) &&
+    testYearsNumber >= 0 &&
+    testYearsNumber <= 6 &&
+    testMonths.trim() !== '' &&
+    Number.isInteger(testMonthsNumber) &&
+    testMonthsNumber >= 0 &&
+    testMonthsNumber <= 11
+  const accountUnitHandling = options.settings['unitHandling'] ?? []
+  const unitHandlingChoices = accountUnitHandling.length > 0 ? accountUnitHandling : UNIT_HANDLING
+  const actualUnitHandling =
+    unitHandlingChoices.find((choice) => choice.value === unitHandling)?.value ??
+    unitHandlingChoices.find((choice) => choice.value === 'VERIFY')?.value ??
+    unitHandlingChoices[0]?.value ??
+    'VERIFY'
   const body = {
     region: scope.region,
     delay: scope.delay,
-    universe: scope.universe,
-    neutralization,
+    universes,
+    neutralizations,
     selectionLimit: limit,
+    decay: decayValid ? decayValue : DEFAULT_DECAY,
+    truncation: truncationValid ? truncationValue : DEFAULT_TRUNCATION,
+    pasteurization,
+    unitHandling: actualUnitHandling,
+    nanHandling,
+    testPeriod: testPeriodValid ? testPeriodOf(testYears, testMonths) : 'P2Y0M0D',
+    investability,
     activation,
     cores,
     customSelections,
@@ -97,6 +152,18 @@ export function SuperAlphaLabScreen() {
       }),
     placeholderData: keepPreviousData,
   })
+  const availableUniverses = options.universes
+    .filter((choice) =>
+      (syncedScopes.data ?? []).some(
+        (market) =>
+          market.instrument_type === scope.instrumentType &&
+          market.region === scope.region &&
+          market.delay === scope.delay &&
+          market.universe === choice.value,
+      ),
+    )
+    .map((choice) => choice.value)
+  const availableInvestability = plan.data?.investability ?? []
   const selectionRun = useMutation({
     mutationFn: (selection: string) =>
       http.post<Schemas['SelectionCount']>('/api/super-lab/selection', {
@@ -117,13 +184,38 @@ export function SuperAlphaLabScreen() {
     queryFn: () => templateLab.options(),
     staleTime: 5 * 60_000,
   })
-  const add = useAddTask(() => http.post<Schemas['AddedTask']>('/api/super-lab/tasks', body))
+  const selectedInvestability = plan.data?.selectedInvestability ?? []
+  const selectedUniverses = availableUniverses.filter((value) => universes.includes(value))
+  const selectedNeutralizations = options.neutralizations
+    .filter((choice) => neutralizations.includes(choice.value))
+    .map((choice) => choice.value)
+  const add = useAddTask(() =>
+    http.post<Schemas['AddedTask']>('/api/super-lab/tasks', {
+      ...body,
+      universes: selectedUniverses,
+      neutralizations: selectedNeutralizations,
+      investability: selectedInvestability,
+    }),
+  )
   const selectionExpressions = submitted.data?.selections ?? []
   const comboExpressions = submitted.data?.combos ?? []
   const hasSelection = customSelections.length > 0
   const hasCombo = customCombos.length > 0
   const ready =
-    !agnostic && limitValid && options.ready && neutralization !== '' && hasSelection && hasCombo
+    !agnostic &&
+    limitValid &&
+    decayValid &&
+    truncationValid &&
+    testPeriodValid &&
+    options.ready &&
+    !plan.isPlaceholderData &&
+    !!plan.data &&
+    plan.data.problems.length === 0 &&
+    selectedInvestability.length > 0 &&
+    selectedUniverses.length > 0 &&
+    selectedNeutralizations.length > 0 &&
+    hasSelection &&
+    hasCombo
 
   return (
     <Page>
@@ -140,6 +232,7 @@ export function SuperAlphaLabScreen() {
         <div className="flex flex-wrap items-end gap-4">
           <ScopePicker
             scope={scope}
+            parts={['region', 'delay']}
             onChange={(next) => {
               selectionRun.reset()
               setScope(next)
@@ -151,14 +244,6 @@ export function SuperAlphaLabScreen() {
               title="A SuperAlpha combines Alphas of one region. Pick a region other than All Regions."
             />
           )}
-          <Field label="Neutralization" className="min-w-56 max-w-xs">
-            <Select
-              label="Neutralization"
-              items={options.neutralizations}
-              value={neutralization}
-              onChange={setPicked}
-            />
-          </Field>
           <Field label="Selection Limit" className="w-32">
             <Input
               type="number"
@@ -388,14 +473,89 @@ export function SuperAlphaLabScreen() {
       </Panel>
 
       <Panel
-        title="Settings"
-        description="Selection Handling is Positive: an Alpha a selection scores zero is left out."
+        title="Simulation Settings"
+        description="Universe, Neutralization and Investability are searched: tick one or several. The rest hold one value for every simulation."
       >
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="flex flex-col gap-4">
+          <Fieldset legend="Universe">
+            {syncedScopes.isError ? (
+              <ErrorNotice error={syncedScopes.error} title="Could not load synced Universes" />
+            ) : options.ready && syncedScopes.data ? (
+              availableUniverses.length ? (
+                <Chips
+                  label="Universe"
+                  items={availableUniverses.map((value) => ({
+                    value,
+                    label: value,
+                  }))}
+                  value={selectedUniverses}
+                  onChange={(next) =>
+                    setUniverses([
+                      ...universes.filter((value) => !availableUniverses.includes(value)),
+                      ...next,
+                    ])
+                  }
+                  disabled={agnostic}
+                />
+              ) : (
+                <span className="text-body-compact text-ink-subtle">
+                  No synced Universes for this region and delay.
+                </span>
+              )
+            ) : (
+              <Skeleton className="h-8 w-64" />
+            )}
+          </Fieldset>
+          {options.neutralizations.length > 0 && (
+            <NeutralizationPicker
+              available={options.neutralizations}
+              value={neutralizations}
+              onChange={setNeutralizations}
+              disabled={agnostic}
+            />
+          )}
           <Fieldset
-            legend="Component Activation"
-            className="rounded-sm border border-hairline bg-surface-2 p-3"
+            legend="Investability"
+            hint="Max Trade and Max Position cap positions by liquidity; BRAIN runs them one at a time."
           >
+            {plan.data ? (
+              <Chips
+                label="Investability"
+                items={availableInvestability.map((value) => ({
+                  value,
+                  label: INVESTABILITY_LABELS[value],
+                }))}
+                value={investability.filter((value) => availableInvestability.includes(value))}
+                onChange={(next) =>
+                  setInvestability([
+                    ...investability.filter((value) => !availableInvestability.includes(value)),
+                    ...next,
+                  ])
+                }
+                disabled={agnostic || plan.isPlaceholderData}
+              />
+            ) : (
+              <Skeleton className="h-8 w-64" />
+            )}
+          </Fieldset>
+          <SimulationSettingsFields
+            decay={decay}
+            setDecay={setDecay}
+            truncation={truncation}
+            setTruncation={setTruncation}
+            pasteurization={pasteurization}
+            setPasteurization={setPasteurization}
+            unitHandling={actualUnitHandling}
+            setUnitHandling={setUnitHandling}
+            unitHandlingChoices={unitHandlingChoices}
+            nanHandling={nanHandling}
+            setNanHandling={setNanHandling}
+            testYears={testYears}
+            setTestYears={setTestYears}
+            testMonths={testMonths}
+            setTestMonths={setTestMonths}
+          />
+          <Fieldset legend="Component Activation">
             <Segmented
               label="Component Activation"
               items={ACTIVATIONS}
@@ -403,27 +563,78 @@ export function SuperAlphaLabScreen() {
               onChange={setActivation}
             />
           </Fieldset>
-          <Fieldset legend="Cores" className="rounded-sm border border-hairline bg-surface-2 p-3">
-            <Segmented label="Cores" items={CORES} value={cores} onChange={setCores} />
-          </Fieldset>
+          {plan.isError && (
+            <ErrorNotice error={plan.error} title="Could not plan simulation settings" />
+          )}
+          {plan.data?.problems.map((problem) => (
+            <Notice key={problem} tone="error" title={problem} />
+          ))}
         </div>
+        {!decayValid && (
+          <Notice
+            tone="error"
+            title={`Decay must be a whole number from 0 to ${MAX_DECAY}.`}
+            className="mt-3"
+          />
+        )}
+        {!truncationValid && (
+          <Notice
+            tone="error"
+            title={`Truncation must be a number from 0 to ${MAX_TRUNCATION}.`}
+            className="mt-3"
+          />
+        )}
+        {!testPeriodValid && (
+          <Notice
+            tone="error"
+            title="Test Period must be from 0 to 6 years and 0 to 11 months."
+            className="mt-3"
+          />
+        )}
+      </Panel>
+
+      <Panel title="Cores">
+        <CoresSetting value={cores} onChange={setCores} />
       </Panel>
 
       <Panel
         title="What Runs"
-        description="Every selected expression with every selected combo runs at two Decays to land Turnover between 2% and 40%. Each runs in Full mode, so BRAIN's own checks say which are submittable: those show green in Tasks and reach the Submission Planner."
+        description="Every selected expression with every selected combo runs at the settings shown. Each runs in Full mode, so BRAIN's own checks say which are submittable: those show green in Tasks and reach the Submission Planner."
       >
         {plan.isError && <ErrorNotice error={plan.error} title="Could not plan the task" />}
         {plan.data && (
           <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-4">
               <Metric boxed label="SuperAlpha Simulations" value={fmt.int(plan.data.simulations)} />
               <Metric
                 boxed
-                label="Decay"
-                value={plan.data.decays.map((d) => String(d)).join(' and ')}
+                label="Universes"
+                value={selectedUniverses.join(', ') || 'None selected'}
               />
+              <Metric
+                boxed
+                label="Neutralizations"
+                value={selectedNeutralizations.join(', ') || 'None selected'}
+              />
+              <Metric boxed label="Decay" value={String(plan.data.decay)} />
               <Metric boxed label="Truncation" value={String(plan.data.truncation)} />
+              <Metric boxed label="Pasteurization" value={plan.data.pasteurization} />
+              <Metric boxed label="Unit Handling" value={plan.data.unitHandling} />
+              <Metric boxed label="NaN Handling" value={plan.data.nanHandling} />
+              <Metric boxed label="Test Period" value={plan.data.testPeriod} />
+              <Metric
+                boxed
+                label="Investability"
+                value={
+                  selectedInvestability.map((value) => INVESTABILITY_LABELS[value]).join(', ') ||
+                  'None selected'
+                }
+              />
+              <Metric
+                boxed
+                label="Component Activation"
+                value={plan.data.activation === 'BOTH' ? 'IS and OS' : plan.data.activation}
+              />
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
               <Disclosure summary={`Selections (${plan.data.selections.length})`}>

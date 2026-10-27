@@ -3558,6 +3558,8 @@ export interface components {
             name: string | null;
             /** Nanhandling */
             nanHandling?: string | null;
+            /** Neutralizations */
+            neutralizations?: string[];
             /** Objectivelabel */
             objectiveLabel: string;
             /** Population */
@@ -3596,6 +3598,8 @@ export interface components {
             truncationAgent: boolean;
             /** Universe */
             universe: string | null;
+            /** Universes */
+            universes?: string[];
         };
         /** LabTasks */
         LabTasks: {
@@ -4920,16 +4924,43 @@ export interface components {
         };
         /** SuperPlan */
         SuperPlan: {
+            /**
+             * Activation
+             * @enum {string}
+             */
+            activation: "IS" | "OS" | "BOTH";
             /** Combos */
             combos: components["schemas"]["Recipe"][];
-            /** Decays */
-            decays: number[];
+            /** Decay */
+            decay: number;
+            /** Investability */
+            investability: ("none" | "max_trade" | "max_position")[];
+            /** Nanhandling */
+            nanHandling: string;
+            /** Neutralizations */
+            neutralizations: string[];
+            /** Pasteurization */
+            pasteurization: string;
+            /** Problems */
+            problems: string[];
+            /** Selectedinvestability */
+            selectedInvestability: ("none" | "max_trade" | "max_position")[];
+            /** Selectedneutralizations */
+            selectedNeutralizations: string[];
+            /** Selecteduniverses */
+            selectedUniverses: string[];
             /** Selections */
             selections: components["schemas"]["Recipe"][];
             /** Simulations */
             simulations: number;
+            /** Testperiod */
+            testPeriod: string;
             /** Truncation */
             truncation: number;
+            /** Unithandling */
+            unitHandling: string;
+            /** Universes */
+            universes: string[];
         };
         /** SuperTask */
         SuperTask: {
@@ -4948,10 +4979,29 @@ export interface components {
             customCombos?: components["schemas"]["Recipe"][];
             /** Customselections */
             customSelections?: components["schemas"]["Recipe"][];
+            /**
+             * Decay
+             * @default 0
+             */
+            decay: number;
             /** Delay */
             delay: number;
-            /** Neutralization */
-            neutralization: string;
+            /** Investability */
+            investability?: ("none" | "max_trade" | "max_position")[];
+            /**
+             * Nanhandling
+             * @default ON
+             * @enum {string}
+             */
+            nanHandling: "ON" | "OFF";
+            /** Neutralizations */
+            neutralizations?: string[];
+            /**
+             * Pasteurization
+             * @default ON
+             * @enum {string}
+             */
+            pasteurization: "ON" | "OFF";
             /** Region */
             region: string;
             /**
@@ -4964,8 +5014,23 @@ export interface components {
              * @default 30
              */
             selectionLimit: number;
-            /** Universe */
-            universe: string;
+            /**
+             * Testperiod
+             * @default P2Y0M0D
+             */
+            testPeriod: string;
+            /**
+             * Truncation
+             * @default 0.08
+             */
+            truncation: number;
+            /**
+             * Unithandling
+             * @default VERIFY
+             */
+            unitHandling: string;
+            /** Universes */
+            universes?: string[];
         };
         /**
          * SyncAllRun

@@ -114,6 +114,8 @@ class LabTask(Out):
     expression: str | None = None
     #: Evolution Lab only: its market's universe, seeds, population and mutation rate.
     universe: str | None
+    universes: list[str] = Field(default_factory=list)
+    neutralizations: list[str] = Field(default_factory=list)
     seeds: int
     population: int | None
     mutation_rate: float | None
@@ -391,6 +393,8 @@ def _task(row: Study, progress: dict[str, Any]) -> LabTask:
             "region": params.get("region"),
             "delay": params.get("delay"),
             "universe": params.get("universe"),
+            "universes": params.get("universes") or [],
+            "neutralizations": params.get("neutralizations") or [],
             "seeds": len(params.get("seeds") or []),
             "population": params.get("population"),
             "mutationRate": params.get("mutationRate"),

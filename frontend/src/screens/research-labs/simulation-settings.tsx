@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/cn'
+import type { Choice } from '@/lib/scope'
 import { Field, Fieldset, Input, Segmented } from '@/ui/kit'
 import { Select } from '@/ui/overlay'
 import { TruncationAgentInfo } from './truncation-agent-info'
@@ -38,6 +39,9 @@ export function SimulationSettingsFields({
   agentSummary,
   pasteurization,
   setPasteurization,
+  unitHandling,
+  setUnitHandling,
+  unitHandlingChoices,
   nanHandling,
   setNanHandling,
   testYears,
@@ -56,6 +60,9 @@ export function SimulationSettingsFields({
   agentSummary?: ReactNode
   pasteurization?: OnOff | undefined
   setPasteurization?: ((v: OnOff) => void) | undefined
+  unitHandling?: string | undefined
+  setUnitHandling?: ((v: string) => void) | undefined
+  unitHandlingChoices?: Choice[] | undefined
   nanHandling: OnOff
   setNanHandling: (v: OnOff) => void
   testYears: string
@@ -67,7 +74,11 @@ export function SimulationSettingsFields({
     <div
       className={cn(
         'grid grid-cols-1 gap-4 sm:grid-cols-2',
-        pasteurization && setPasteurization ? 'xl:grid-cols-5' : 'xl:grid-cols-4',
+        pasteurization && setPasteurization
+          ? unitHandling && setUnitHandling
+            ? 'xl:grid-cols-6'
+            : 'xl:grid-cols-5'
+          : 'xl:grid-cols-4',
       )}
     >
       <Field label="Decay" className={TILE}>
@@ -126,6 +137,16 @@ export function SimulationSettingsFields({
             value={pasteurization}
             onChange={setPasteurization}
             items={ON_OFF}
+          />
+        </Field>
+      )}
+      {unitHandling && setUnitHandling && (
+        <Field label="Unit Handling" className={TILE}>
+          <Select
+            label="Unit Handling"
+            value={unitHandling}
+            onChange={setUnitHandling}
+            items={unitHandlingChoices ?? []}
           />
         </Field>
       )}

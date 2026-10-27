@@ -16,7 +16,7 @@ import math
 import operator
 import re
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from ..brain.schemas import SimulationRequest, SimulationSettings
 from .fastexpr import (
@@ -50,8 +50,10 @@ PRESETS: dict[str, str] = {
     "ts_op": "ts_rank, ts_zscore, ts_delta, ts_av_diff",
     "group_op": "group_rank, group_zscore, group_neutralize",
 }
+Investability = Literal["none", "max_trade", "max_position"]
+
 #: maxTrade and maxPosition for each Investability a task can search. BRAIN refuses both ON.
-INVESTABILITY: dict[str, tuple[str, str]] = {
+INVESTABILITY: dict[Investability, tuple[str, str]] = {
     "none": ("OFF", "OFF"),
     "max_trade": ("ON", "OFF"),
     "max_position": ("OFF", "ON"),
@@ -62,7 +64,7 @@ MAX_TRADE_REGIONS = frozenset({"ASI", "JPN", "HKG", "TWN", "KOR"})
 #: The Investability each region takes. BRAIN's settings schema offers Max Position everywhere
 #: but refuses it outside the first five, for every delay and universe. A region missing here
 #: is offered no Max Position.
-REGION_INVESTABILITY: dict[str, tuple[str, ...]] = {
+REGION_INVESTABILITY: dict[str, tuple[Investability, ...]] = {
     "USA": ("none", "max_trade", "max_position"),
     "EUR": ("none", "max_trade", "max_position"),
     "GLB": ("none", "max_trade", "max_position"),

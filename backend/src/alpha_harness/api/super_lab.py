@@ -53,6 +53,17 @@ class SuperPlan(Out):
     simulations: int
 
 
+class SelectionRun(Out):
+    region: str
+    delay: int
+    selection: str = Field(min_length=1, max_length=2000)
+    selection_limit: int = Field(default=30, ge=super_alpha.MIN_SELECTION, le=200)
+
+
+class SelectionCount(Out):
+    count: int
+
+
 class SubmittedExpression(Out):
     name: str
     code: str
@@ -165,15 +176,19 @@ def _activations(choice: str) -> list[str]:
     return ["IS", "OS"] if choice == "BOTH" else [choice]
 
 
+def _selection_code(code: str, limit: int) -> str:
+    cap = super_alpha.OPERATOR_LIMIT // limit
+    return f"(operator_count <= {cap}) * max(0, ({code.strip()}))"
+
+
 def _recipes(body: SuperTask) -> tuple[list[super_alpha.Recipe], list[super_alpha.Recipe]]:
     selections: list[super_alpha.Recipe] = []
     combos: list[super_alpha.Recipe] = []
-    cap = super_alpha.OPERATOR_LIMIT // body.selection_limit
     for index, recipe in enumerate(body.custom_selections, 1):
         selections.append(
             super_alpha.Recipe(
                 f"Custom selection {index} · {recipe.name}",
-                f"(operator_count <= {cap}) * max(0, ({recipe.code.strip()}))",
+                _selection_code(recipe.code, body.selection_limit),
             )
         )
     for index, recipe in enumerate(body.custom_combos, 1):
@@ -181,6 +196,24 @@ def _recipes(body: SuperTask) -> tuple[list[super_alpha.Recipe], list[super_alph
             super_alpha.Recipe(f"Custom combo {index} · {recipe.name}", recipe.code.strip())
         )
     return selections, combos
+
+
+@router.post("/selection")
+async def run_selection(body: SelectionRun, state: State) -> SelectionCount:
+    """Run only a selection expression through BRAIN's SuperAlpha selection endpoint."""
+    if body.region == "ALL":
+        raise refuse(422, "region_agnostic", "SuperAlphas combine Alphas of one region.")
+    result = await state.endpoints.super_selection(
+        region=body.region,
+        delay=body.delay,
+        selection=body.selection.strip(),
+        selection_limit=body.selection_limit,
+        selection_handling="POSITIVE",
+    )
+    count = result.get("count")
+    if not isinstance(count, int) or isinstance(count, bool):
+        raise ValueError(f"Unexpected BRAIN SuperAlpha selection response: {result!r}")
+    return SelectionCount(count=count)
 
 
 @router.post("/plan")

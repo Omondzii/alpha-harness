@@ -1,6 +1,6 @@
 /** Super Alpha Lab: SuperAlphas built from your own submitted Alphas, every pairing in one task. */
 
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { CheckIcon, CopyIcon, PlusIcon, SearchIcon, XIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -97,6 +97,15 @@ export function SuperAlphaLabScreen() {
       }),
     placeholderData: keepPreviousData,
   })
+  const selectionRun = useMutation({
+    mutationFn: (selection: string) =>
+      http.post<Schemas['SelectionCount']>('/api/super-lab/selection', {
+        region: scope.region,
+        delay: scope.delay,
+        selection,
+        selectionLimit: limitValid ? limit : MIN_LIMIT,
+      }),
+  })
   const submitted = useQuery({
     queryKey: ['super-lab', 'submitted-expressions'],
     queryFn: () =>
@@ -129,7 +138,13 @@ export function SuperAlphaLabScreen() {
         description="Only your submitted ACTIVE Alphas of this region and delay can be selected."
       >
         <div className="flex flex-wrap items-end gap-4">
-          <ScopePicker scope={scope} onChange={setScope} />
+          <ScopePicker
+            scope={scope}
+            onChange={(next) => {
+              selectionRun.reset()
+              setScope(next)
+            }}
+          />
           {agnostic && (
             <Notice
               tone="error"
@@ -235,7 +250,10 @@ export function SuperAlphaLabScreen() {
               label="Custom expression type"
               items={CUSTOM_EXPRESSION_TYPES}
               value={customExpressionType}
-              onChange={setCustomExpressionType}
+              onChange={(value) => {
+                selectionRun.reset()
+                setCustomExpressionType(value)
+              }}
             />
             {templateOptions.isError && (
               <ErrorNotice
@@ -250,6 +268,7 @@ export function SuperAlphaLabScreen() {
                 maxLength={2000}
                 onChange={(value) => {
                   if (customExpressionType === 'selection') {
+                    selectionRun.reset()
                     setSelectionCode(value)
                   } else {
                     setComboCode(value)
@@ -263,40 +282,65 @@ export function SuperAlphaLabScreen() {
                 scope={scope}
               />
             </div>
-            <Button
-              size="md"
-              variant="primary"
-              className="mt-1"
-              disabled={
-                !(customExpressionType === 'selection' ? selectionCode : comboCode).trim() ||
-                (customExpressionType === 'selection'
-                  ? customSelections.length
-                  : customCombos.length) >= MAX_CUSTOM_RECIPES
-              }
-              onClick={() => {
-                if (customExpressionType === 'selection') {
-                  setCustomSelections((current) => [
-                    ...current,
-                    {
-                      name: `Selection ${current.length + 1}`,
-                      code: selectionCode.trim(),
-                    },
-                  ])
-                  setSelectionCode('')
-                } else {
-                  setCustomCombos((current) => [
-                    ...current,
-                    {
-                      name: `Combo ${current.length + 1}`,
-                      code: comboCode.trim(),
-                    },
-                  ])
-                  setComboCode('')
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <Button
+                size="md"
+                variant="primary"
+                disabled={
+                  !(customExpressionType === 'selection' ? selectionCode : comboCode).trim() ||
+                  (customExpressionType === 'selection' &&
+                    customSelections.length >= MAX_CUSTOM_RECIPES) ||
+                  (customExpressionType === 'combo' && customCombos.length >= MAX_CUSTOM_RECIPES)
                 }
-              }}
-            >
-              Add {customExpressionType}
-            </Button>
+                onClick={() => {
+                  if (customExpressionType === 'selection') {
+                    setCustomSelections((current) => [
+                      ...current,
+                      {
+                        name: `Selection ${current.length + 1}`,
+                        code: selectionCode.trim(),
+                      },
+                    ])
+                    selectionRun.reset()
+                    setSelectionCode('')
+                  } else {
+                    setCustomCombos((current) => [
+                      ...current,
+                      {
+                        name: `Combo ${current.length + 1}`,
+                        code: comboCode.trim(),
+                      },
+                    ])
+                    setComboCode('')
+                  }
+                }}
+              >
+                Add {customExpressionType}
+              </Button>
+              {customExpressionType === 'selection' && (
+                <Button
+                  size="md"
+                  loading={selectionRun.isPending}
+                  disabled={!selectionCode.trim() || !limitValid || agnostic}
+                  onClick={() => selectionRun.mutate(selectionCode.trim())}
+                >
+                  Run Selection
+                </Button>
+              )}
+            </div>
+            {customExpressionType === 'selection' && (
+              <>
+                {selectionRun.isError && (
+                  <ErrorNotice
+                    error={selectionRun.error}
+                    title="Could not run the selection expression"
+                  />
+                )}
+                {selectionRun.data && !selectionRun.isPending && (
+                  <Metric boxed label="Selected Alphas" value={fmt.int(selectionRun.data.count)} />
+                )}
+              </>
+            )}
             {customExpressionType === 'selection' ? (
               <CustomRecipes
                 recipes={customSelections}
@@ -337,7 +381,10 @@ export function SuperAlphaLabScreen() {
               min={MIN_LIMIT}
               max={MAX_LIMIT}
               value={Number.isNaN(limit) ? '' : String(limit)}
-              onChange={(e) => setLimit(e.target.valueAsNumber)}
+              onChange={(e) => {
+                selectionRun.reset()
+                setLimit(e.target.valueAsNumber)
+              }}
               className="w-full num"
             />
           </Fieldset>

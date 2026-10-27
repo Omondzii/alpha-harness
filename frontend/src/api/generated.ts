@@ -1605,6 +1605,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/super-lab/selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Selection
+         * @description Run only a selection expression through BRAIN's SuperAlpha selection endpoint.
+         */
+        post: operations["run_selection_api_super_lab_selection_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/super-lab/submitted-expressions": {
         parameters: {
             query?: never;
@@ -4534,6 +4554,25 @@ export interface components {
             sharpe: number | null;
             /** Turnover */
             turnover: number | null;
+        };
+        /** SelectionCount */
+        SelectionCount: {
+            /** Count */
+            count: number;
+        };
+        /** SelectionRun */
+        SelectionRun: {
+            /** Delay */
+            delay: number;
+            /** Region */
+            region: string;
+            /** Selection */
+            selection: string;
+            /**
+             * Selectionlimit
+             * @default 30
+             */
+            selectionLimit: number;
         };
         /** Session */
         Session: {
@@ -7967,6 +8006,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SuperPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_selection_api_super_lab_selection_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectionRun"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SelectionCount"];
                 };
             };
             /** @description Validation Error */

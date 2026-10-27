@@ -9,6 +9,7 @@ open-ended or undocumented blobs the callers read selectively.
 """
 
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlencode
 
 import structlog
 
@@ -195,6 +196,35 @@ class BrainEndpoints:
             # Only a 201 started a simulation; a redirect (say, to sign-in) did not.
             raise BrainServiceUnavailable(f"POST /simulations answered {r.status}", status=r.status)
         return r
+
+    async def super_selection(
+        self,
+        *,
+        region: str,
+        delay: int,
+        selection: str,
+        selection_limit: int,
+        selection_handling: str,
+    ) -> dict[str, Any]:
+        """Ask BRAIN which Alphas a SuperAlpha selection expression selects.
+
+        This is BRAIN's selection-only endpoint, not a simulation and does not create an Alpha.
+        """
+        query = urlencode(
+            {
+                "settings.instrumentType": "EQUITY",
+                "settings.region": region,
+                "settings.delay": delay,
+                "selection": selection,
+                "limit": 10,
+                "selectionLimit": selection_limit,
+                "selectionHandling": selection_handling,
+            }
+        )
+        response = await self.client.poll(f"/simulations/super-selection?{query}")
+        if not isinstance(response.body, dict):
+            raise ValueError(f"Unexpected BRAIN SuperAlpha selection response: {response.body!r}")
+        return response.body
 
     async def read_simulation(self, simulation_id: str) -> BrainResponse:
         """One raw status read, errors included: the tracker decides what each one means."""

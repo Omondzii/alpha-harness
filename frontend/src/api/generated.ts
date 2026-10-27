@@ -1605,6 +1605,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/super-lab/selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Selection
+         * @description Run only a selection expression through BRAIN's SuperAlpha selection endpoint.
+         */
+        post: operations["run_selection_api_super_lab_selection_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/super-lab/submitted-expressions": {
         parameters: {
             query?: never;
@@ -3538,6 +3558,8 @@ export interface components {
             name: string | null;
             /** Nanhandling */
             nanHandling?: string | null;
+            /** Neutralizations */
+            neutralizations?: string[];
             /** Objectivelabel */
             objectiveLabel: string;
             /** Population */
@@ -3576,6 +3598,8 @@ export interface components {
             truncationAgent: boolean;
             /** Universe */
             universe: string | null;
+            /** Universes */
+            universes?: string[];
         };
         /** LabTasks */
         LabTasks: {
@@ -4535,6 +4559,25 @@ export interface components {
             /** Turnover */
             turnover: number | null;
         };
+        /** SelectionCount */
+        SelectionCount: {
+            /** Count */
+            count: number;
+        };
+        /** SelectionRun */
+        SelectionRun: {
+            /** Delay */
+            delay: number;
+            /** Region */
+            region: string;
+            /** Selection */
+            selection: string;
+            /**
+             * Selectionlimit
+             * @default 30
+             */
+            selectionLimit: number;
+        };
         /** Session */
         Session: {
             /** Authenticated */
@@ -4881,16 +4924,43 @@ export interface components {
         };
         /** SuperPlan */
         SuperPlan: {
+            /**
+             * Activation
+             * @enum {string}
+             */
+            activation: "IS" | "OS" | "BOTH";
             /** Combos */
             combos: components["schemas"]["Recipe"][];
-            /** Decays */
-            decays: number[];
+            /** Decay */
+            decay: number;
+            /** Investability */
+            investability: ("none" | "max_trade" | "max_position")[];
+            /** Nanhandling */
+            nanHandling: string;
+            /** Neutralizations */
+            neutralizations: string[];
+            /** Pasteurization */
+            pasteurization: string;
+            /** Problems */
+            problems: string[];
+            /** Selectedinvestability */
+            selectedInvestability: ("none" | "max_trade" | "max_position")[];
+            /** Selectedneutralizations */
+            selectedNeutralizations: string[];
+            /** Selecteduniverses */
+            selectedUniverses: string[];
             /** Selections */
             selections: components["schemas"]["Recipe"][];
             /** Simulations */
             simulations: number;
+            /** Testperiod */
+            testPeriod: string;
             /** Truncation */
             truncation: number;
+            /** Unithandling */
+            unitHandling: string;
+            /** Universes */
+            universes: string[];
         };
         /** SuperTask */
         SuperTask: {
@@ -4909,10 +4979,29 @@ export interface components {
             customCombos?: components["schemas"]["Recipe"][];
             /** Customselections */
             customSelections?: components["schemas"]["Recipe"][];
+            /**
+             * Decay
+             * @default 0
+             */
+            decay: number;
             /** Delay */
             delay: number;
-            /** Neutralization */
-            neutralization: string;
+            /** Investability */
+            investability?: ("none" | "max_trade" | "max_position")[];
+            /**
+             * Nanhandling
+             * @default ON
+             * @enum {string}
+             */
+            nanHandling: "ON" | "OFF";
+            /** Neutralizations */
+            neutralizations?: string[];
+            /**
+             * Pasteurization
+             * @default ON
+             * @enum {string}
+             */
+            pasteurization: "ON" | "OFF";
             /** Region */
             region: string;
             /**
@@ -4925,8 +5014,23 @@ export interface components {
              * @default 30
              */
             selectionLimit: number;
-            /** Universe */
-            universe: string;
+            /**
+             * Testperiod
+             * @default P2Y0M0D
+             */
+            testPeriod: string;
+            /**
+             * Truncation
+             * @default 0.08
+             */
+            truncation: number;
+            /**
+             * Unithandling
+             * @default VERIFY
+             */
+            unitHandling: string;
+            /** Universes */
+            universes?: string[];
         };
         /**
          * SyncAllRun
@@ -7967,6 +8071,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SuperPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_selection_api_super_lab_selection_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectionRun"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SelectionCount"];
                 };
             };
             /** @description Validation Error */

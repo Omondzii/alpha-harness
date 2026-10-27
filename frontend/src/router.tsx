@@ -157,7 +157,12 @@ const poolTab = createRoute({
   path: '$tab',
   validateSearch: (search: Record<string, unknown>) => {
     return {
-      pyramids: Array.isArray(search['pyramids']) ? search['pyramids'] as string[] : undefined,
+      pyramids: Array.isArray(search['pyramids'])
+        ? (search['pyramids'] as string[])
+        : undefined,
+      ...(Array.isArray(search['pyramidIds'])
+        ? { pyramidIds: search['pyramidIds'] as string[] }
+        : {}),
     }
   },
   component: lazyRouteComponent(() => import('@/screens/pool'), 'PoolScreen'),

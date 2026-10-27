@@ -139,6 +139,8 @@ ALPHA_METRICS: dict[str, str] = {
     "date_submitted": "a.date_submitted",
 }
 
+ALPHA_SORTS = ALPHA_METRICS | {"region": "a.region"}
+
 #: Types that can seed the Evolution Lab.
 #:
 #: An ``RA_CHILD`` is an ordinary Alpha that happens to have arrived through a
@@ -640,12 +642,15 @@ class AlphaVault:
             # e.g. "Model" matches "ASI/D1/Model", "USA/D0/Model", etc.
             pyramid_conditions = []
             for p in pyramids:
-                pyramid_conditions.append("EXISTS (SELECT 1 FROM json_each(a.pyramids) WHERE value LIKE ?)")
-                params.append(f"%/{p}")
+                pyramid_conditions.append(
+                    "EXISTS (SELECT 1 FROM json_each(a.pyramids) "
+                    "WHERE lower(json_extract_string(value, '$')) LIKE ?)"
+                )
+                params.append(f"%/{p.lower()}")
             clauses.append(f"({' OR '.join(pyramid_conditions)})")
 
         where = " AND ".join(clauses)
-        order = ALPHA_METRICS.get(sort_by, ALPHA_METRICS["date_created"])
+        order = ALPHA_SORTS.get(sort_by, ALPHA_METRICS["date_created"])
         direction = "DESC" if sort_desc else "ASC"
         # Picking seeds, a region-agnostic parent sorts, filters and shows as its family.
         source = STANDING_VIEW if evolvable else "alpha"

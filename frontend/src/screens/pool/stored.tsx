@@ -69,9 +69,10 @@ const COLUMNS: Column<AlphaRow>[] = [
     ),
   },
   {
-    key: 'market',
+    key: 'region',
     header: 'Region · Universe',
     width: '190px',
+    sortable: true,
     cell: (r) => (
       <span className="num text-ink-subtle">
         {r.region ?? '—'}
@@ -179,7 +180,9 @@ export function Stored({
     queryKey: ['pool', 'overview'],
     queryFn: pool.overview,
   })
-  const [submitted, setSubmitted] = useState<'no' | 'yes'>('no')
+  const [submitted, setSubmitted] = useState<'no' | 'yes'>(
+    searchParams.pyramids?.length || searchParams.pyramidIds?.length ? 'yes' : 'no',
+  )
   const [copying, setCopying] = useState(false)
   const [search, setSearch] = useState('')
   const [regions, setRegions] = useState<string[]>([])
@@ -190,7 +193,8 @@ export function Stored({
   const [limit, setLimit] = useState(100)
   const [offset, setOffset] = useState(0)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [pyramids, setPyramids] = useState<string[]>((searchParams as { pyramids?: string[] }).pyramids || [])
+  const pyramids = searchParams.pyramids ?? []
+  const pyramidIds = searchParams.pyramidIds ?? []
   // Debounced rather than deferred: `useDeferredValue` still asks the backend once per keystroke.
   const quietSearch = useDebounced(search, 300)
   const quietBounds = useDebounced(bounds, 400)
@@ -219,7 +223,7 @@ export function Stored({
     delays: market ? [market.delay] : delays.length ? delays.map(Number) : null,
     universes: market ? [market.universe] : universes.length ? universes : null,
     search: quietSearch.trim() || null,
-    pyramids: pyramids.length ? pyramids : null,
+    pyramids: pyramids.length || pyramidIds.length ? [...pyramids, ...pyramidIds] : null,
     minimum: Object.fromEntries(
       BOUNDS.flatMap((b) => {
         const v = parseNum(quietBounds[b.key]?.min ?? '')
@@ -431,11 +435,14 @@ export function Stored({
                       size="sm"
                       variant="ghost"
                       onClick={() => {
-                        setPyramids([])
-                        navigate({
+                        void navigate({
                           to: '/pool/$tab',
                           params: { tab: 'stored' },
-                          search: (prev) => ({ ...prev, pyramids: undefined }),
+                          search: (prev) => ({
+                            ...prev,
+                            pyramids: undefined,
+                            pyramidIds: [],
+                          }),
                         })
                       }}
                     >

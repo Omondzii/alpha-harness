@@ -140,9 +140,19 @@ class BreakerParams(TaskParams):
 class SuperParams(TaskParams):
     """Super Alpha Lab: every selection and combo pairing is written up front."""
 
+    #: The scalar fields below remain for tasks written before market sweeps were available.
     universe: str = ""
+    universes: list[str] = Field(default_factory=list)
     neutralization: str = ""
+    neutralizations: list[str] = Field(default_factory=list)
     selection_limit: int = 30
+    decay: int = 0
+    truncation: float = 0.08
+    pasteurization: str = "ON"
+    unit_handling: str = "VERIFY"
+    nan_handling: str = "ON"
+    test_period: str = TEST_PERIOD
+    investability: list[str] = Field(default_factory=lambda: ["none"])
     #: ``IS``, ``OS``, or both: each pairing then runs once under each.
     activation: list[str] = Field(default_factory=lambda: ["IS", "OS"])
     #: The recipes queued, as ``selection · combo``, for the task's detail line.

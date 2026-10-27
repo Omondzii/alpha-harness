@@ -268,7 +268,9 @@ export function TasksScreen() {
   const list = useQuery({ queryKey: ['lab-tasks'], queryFn: labTasks.list })
   useRefetchOn('studies', ['lab-tasks'], 2_000)
   useRefetchOn('simulations', ['lab-tasks'], 5_000)
-  const [selectedId, setSelectedId] = useState<number | null>((search as { taskId?: number }).taskId ?? null)
+  const [selectedId, setSelectedId] = useState<number | null>(
+    (search as { taskId?: number }).taskId ?? null,
+  )
   const [editing, setEditing] = useState<LabTask | null>(null)
   const [renaming, setRenaming] = useState<LabTask | null>(null)
   const [confirming, setConfirming] = useState<Act | null>(null)
@@ -852,7 +854,7 @@ function TaskDetail({
       ? // Held at the source Alpha's values for every simulation in the sweep.
         `${fmt.int(task.markets)} Markets · Decay ${task.decay ?? DASH} · ${task.truncationAgent ? 'Truncation Agent' : `Truncation ${task.truncation ?? DASH}`} · NaN Handling ${task.nanHandling ?? DASH}`
       : task.lab === 'super-alpha'
-        ? `${task.universe ?? DASH} · SuperAlphas from your submitted Alphas`
+        ? `${task.universes?.join(', ') || task.universe || DASH} · ${task.neutralizations?.join(', ') || DASH} · Decay ${task.decay ?? DASH} · Truncation ${task.truncation ?? DASH} · SuperAlphas from your submitted Alphas`
         : task.seeds > 0
           ? `${task.universe ?? DASH} · ${fmt.int(task.seeds)} seeds · Population ${fmt.int(task.population)} · Mutation ${fmt.pct(task.mutationRate, 0)}`
           : `Decay ${task.decay ?? DASH} · ${fmt.int(task.fields)} fields`

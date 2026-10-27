@@ -88,6 +88,7 @@ export interface ScopeOptions {
   delays: Choice[]
   universes: Choice[]
   neutralizations: Choice[]
+  settings: Record<string, Choice[]>
   /** False until the platform has answered for this region and delay. */
   ready: boolean
   isError: boolean
@@ -117,6 +118,9 @@ export function useScopeOptions(scope: Scope): ScopeOptions {
   const fields = query.data?.fields
   return useMemo(() => {
     const universes = choices(fields?.['universe']?.choices)
+    const settings = Object.fromEntries(
+      Object.entries(fields ?? {}).map(([name, field]) => [name, choices(field.choices)]),
+    )
     return {
       // BRAIN's own labels, `ALL` included. The picker is a list of region codes in a
       // monospace control, and "All Regions" among USA, GLB and EUR reads as a different
@@ -126,6 +130,7 @@ export function useScopeOptions(scope: Scope): ScopeOptions {
       delays: choices(fields?.['delay']?.choices),
       universes,
       neutralizations: choices(fields?.['neutralization']?.choices),
+      settings,
       ready: universes.length > 0,
       isError: query.isError,
     }

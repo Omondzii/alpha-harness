@@ -159,7 +159,28 @@ export function SuperAlphaLabScreen() {
               onChange={setPicked}
             />
           </Field>
+          <Field label="Selection Limit" className="w-32">
+            <Input
+              type="number"
+              min={MIN_LIMIT}
+              max={MAX_LIMIT}
+              value={Number.isNaN(limit) ? '' : String(limit)}
+              onChange={(e) => {
+                selectionRun.reset()
+                setLimit(e.target.valueAsNumber)
+              }}
+              className="w-full num"
+              aria-describedby="selection-limit-hint"
+            />
+          </Field>
         </div>
+        {!limitValid && (
+          <Notice
+            tone="error"
+            title={`Selection Limit must be a whole number from ${MIN_LIMIT} to ${MAX_LIMIT}.`}
+            className="mt-3"
+          />
+        )}
       </Panel>
 
       <Panel
@@ -372,23 +393,6 @@ export function SuperAlphaLabScreen() {
       >
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <Fieldset
-            legend="Selection Limit"
-            hint={`Alphas kept from the top of each ranking, ${MIN_LIMIT} to ${MAX_LIMIT}.`}
-            className="rounded-sm border border-hairline bg-surface-2 p-3"
-          >
-            <Input
-              type="number"
-              min={MIN_LIMIT}
-              max={MAX_LIMIT}
-              value={Number.isNaN(limit) ? '' : String(limit)}
-              onChange={(e) => {
-                selectionRun.reset()
-                setLimit(e.target.valueAsNumber)
-              }}
-              className="w-full num"
-            />
-          </Fieldset>
-          <Fieldset
             legend="Component Activation"
             className="rounded-sm border border-hairline bg-surface-2 p-3"
           >
@@ -403,13 +407,6 @@ export function SuperAlphaLabScreen() {
             <Segmented label="Cores" items={CORES} value={cores} onChange={setCores} />
           </Fieldset>
         </div>
-        {!limitValid && (
-          <Notice
-            tone="error"
-            title={`Selection Limit must be a whole number from ${MIN_LIMIT} to ${MAX_LIMIT}.`}
-            className="mt-3"
-          />
-        )}
       </Panel>
 
       <Panel

@@ -19,7 +19,7 @@ from ..brain.errors import BrainError, BrainPollTimeout, BrainServerError, Brain
 from ..db.models import BrainCache, SimulationRecord, Study, Trial, TrialState, utcnow
 from ..labs.fastexpr import ParseError, data_fields, operator_count, operator_names, parse
 from ..labs.params import TASK_SAMPLERS
-from ..schemas import Out
+from ..schemas import WIRE, Out
 from ..tools import portfolio
 from ..vault.yields import (
     PLATFORM_ALPHA_URL,
@@ -78,6 +78,8 @@ class AlphaInfo(Out):
     author: str | None
     code: str | None
     selection_expression: str | None
+    selection_description: str | None
+    combo_description: str | None
     description: str | None
     operator_count: int | None
     name: str | None
@@ -147,11 +149,15 @@ class AlphaView(Out):
 
 
 class AlphaProperties(BaseModel):
+    model_config = WIRE
+
     name: str | None = None
     category: str | None = None
     color: str | None = None
     tags: list[str] = Field(default_factory=list)
     description: str | None = None
+    selection_description: str | None = None
+    combo_description: str | None = None
 
 
 # -- cache ---------------------------------------------------------------
@@ -244,6 +250,7 @@ def _power_pool_counts(code: Any) -> tuple[int | None, list[str] | None, list[st
 def _info(alpha_id: str, body: dict[str, Any]) -> AlphaInfo:
     code = body.get("regular") or body.get("combo") or body.get("selection") or {}
     selection = body.get("selection") or {}
+    combo = body.get("combo") or {}
     sample = body.get("is") or {}
     settings = body.get("settings") or {}
     counted, fields, operators = _power_pool_counts(code.get("code"))
@@ -256,6 +263,8 @@ def _info(alpha_id: str, body: dict[str, Any]) -> AlphaInfo:
         author=body.get("author"),
         code=code.get("code"),
         selection_expression=selection.get("code"),
+        selection_description=selection.get("description"),
+        combo_description=combo.get("description"),
         description=code.get("description"),
         operator_count=code.get("operatorCount"),
         name=body.get("name"),
@@ -499,6 +508,10 @@ async def update_properties(alpha_id: str, body: AlphaProperties, state: State) 
     }
     if body.description and body.description.strip():
         patch["regular"] = {"description": body.description}
+    for key in ("selection", "combo"):
+        description = getattr(body, f"{key}_description")
+        if description and description.strip():
+            patch[key] = {"description": description}
     updated = await state.endpoints.update_alpha(alpha_id, patch)
     if not updated.get("id"):
         updated = await state.endpoints.alpha_body(alpha_id)

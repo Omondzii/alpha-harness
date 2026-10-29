@@ -2243,6 +2243,8 @@ export interface components {
             code: string | null;
             /** Color */
             color: string | null;
+            /** Combodescription */
+            comboDescription: string | null;
             /** Datafields */
             dataFields: string[] | null;
             /** Datecreated */
@@ -2263,6 +2265,8 @@ export interface components {
             operators: string[] | null;
             /** Powerpooloperators */
             powerPoolOperators: number | null;
+            /** Selectiondescription */
+            selectionDescription: string | null;
             /** Selectionexpression */
             selectionExpression: string | null;
             /** Settings */
@@ -2382,10 +2386,14 @@ export interface components {
             category?: string | null;
             /** Color */
             color?: string | null;
+            /** Combodescription */
+            comboDescription?: string | null;
             /** Description */
             description?: string | null;
             /** Name */
             name?: string | null;
+            /** Selectiondescription */
+            selectionDescription?: string | null;
             /** Tags */
             tags?: string[];
         };

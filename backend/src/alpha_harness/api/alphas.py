@@ -77,6 +77,7 @@ class AlphaInfo(Out):
     type: str | None
     author: str | None
     code: str | None
+    selection_expression: str | None
     description: str | None
     operator_count: int | None
     name: str | None
@@ -242,6 +243,7 @@ def _power_pool_counts(code: Any) -> tuple[int | None, list[str] | None, list[st
 
 def _info(alpha_id: str, body: dict[str, Any]) -> AlphaInfo:
     code = body.get("regular") or body.get("combo") or body.get("selection") or {}
+    selection = body.get("selection") or {}
     sample = body.get("is") or {}
     settings = body.get("settings") or {}
     counted, fields, operators = _power_pool_counts(code.get("code"))
@@ -253,6 +255,7 @@ def _info(alpha_id: str, body: dict[str, Any]) -> AlphaInfo:
         type=body.get("type"),
         author=body.get("author"),
         code=code.get("code"),
+        selection_expression=selection.get("code"),
         description=code.get("description"),
         operator_count=code.get("operatorCount"),
         name=body.get("name"),

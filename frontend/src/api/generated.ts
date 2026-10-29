@@ -2259,6 +2259,8 @@ export interface components {
             operators: string[] | null;
             /** Powerpooloperators */
             powerPoolOperators: number | null;
+            /** Selectionexpression */
+            selectionExpression: string | null;
             /** Settings */
             settings: {
                 [key: string]: unknown;

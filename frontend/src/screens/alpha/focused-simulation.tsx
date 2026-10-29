@@ -12,6 +12,7 @@ import { useDebounced } from '@/lib/use-debounced'
 import { pool } from '@/screens/pool/api'
 import { checkFigure } from '@/screens/pool/shared'
 import { SimulationSettingsFields, testPeriodOf } from '@/screens/research-labs/simulation-settings'
+import type { VariableDef, VariableInfo } from '@/screens/research-labs/template/api'
 import {
   INVESTABILITY_LABELS,
   type Investability,
@@ -62,6 +63,11 @@ type SavedDraft = {
 
 const TEST_PERIOD = /^P(\d+)Y(\d+)M/
 const MARKET_PARTS: readonly ScopePart[] = ['region', 'delay', 'universe']
+const EMPTY_OPERATOR_DOCS: OperatorDoc[] = []
+const EMPTY_PRESETS: Record<string, string> = {}
+const EMPTY_VARIABLES: Record<string, VariableDef | null> = {}
+const EMPTY_VARIABLE_INFOS = new Map<string, VariableInfo>()
+const EMPTY_PROBLEMS: string[] = []
 
 function scopeFrom(settings: Settings): Scope {
   return {
@@ -88,6 +94,8 @@ export function FocusedSimulationScreen() {
   const [combo, setCombo] = useState('')
   const [recordId, setRecordId] = useState<number | null>(null)
   const [draftKey, setDraftKey] = useState<string | null>(null)
+  const [savedDraftSignature, setSavedDraftSignature] = useState<string | null>(null)
+  const [draftSaveError, setDraftSaveError] = useState<unknown>(null)
   const updateScope = useCallback(
     (change: Partial<Scope>) => setSettings((current) => ({ ...current, ...change })),
     [],
@@ -160,7 +168,14 @@ export function FocusedSimulationScreen() {
           (parsed.mode === undefined || parsed.mode === 'FULL' || parsed.mode === 'QUICK') &&
           (parsed.reserveCore === undefined || typeof parsed.reserveCore === 'boolean')
         ) {
-          restored = parsed as SavedDraft
+          restored = {
+            settings: parsed.settings,
+            regular: parsed.regular,
+            selection: parsed.selection,
+            combo: parsed.combo,
+            mode: parsed.mode ?? 'FULL',
+            reserveCore: parsed.reserveCore ?? true,
+          }
         } else {
           localStorage.removeItem(key)
         }
@@ -175,15 +190,11 @@ export function FocusedSimulationScreen() {
     setCombo(restored.combo)
     setMode(restored.mode ?? 'FULL')
     setReserveCore(restored.reserveCore ?? true)
+    setSavedDraftSignature(JSON.stringify(restored))
+    setDraftSaveError(null)
     setRecordId(null)
     setDraftKey(key)
   }, [alpha, alphaId])
-
-  useEffect(() => {
-    if (!draftKey) return
-    const draft: SavedDraft = { settings, regular, selection, combo, mode, reserveCore }
-    localStorage.setItem(draftKey, JSON.stringify(draft))
-  }, [combo, draftKey, mode, regular, reserveCore, selection, settings])
 
   const run = useMutation({
     mutationFn: () =>
@@ -252,18 +263,42 @@ export function FocusedSimulationScreen() {
     alpha.type === 'SUPER' && combo !== (alpha.code ?? ''),
   ].filter(Boolean).length
   const changedCount = changedSettings.length + changedExpressions
+  const currentDraft: SavedDraft = { settings, regular, selection, combo, mode, reserveCore }
+  const currentDraftSignature = JSON.stringify(currentDraft)
+  const hasUnsavedDraft = Boolean(draftKey && currentDraftSignature !== savedDraftSignature)
 
   const updateSetting = (name: string, value: unknown) =>
     setSettings((current) => ({ ...current, [name]: value }))
   const resetDraft = () => {
     localStorage.removeItem(`alpha-harness-focused-draft:${alphaId}`)
-    setSettings({ ...alpha.settings })
-    setRegular(alpha.type === 'SUPER' ? '' : (alpha.code ?? ''))
-    setSelection(alpha.selectionExpression ?? '')
-    setCombo(alpha.type === 'SUPER' ? (alpha.code ?? '') : '')
+    const baseline: SavedDraft = {
+      settings: { ...alpha.settings },
+      regular: alpha.type === 'SUPER' ? '' : (alpha.code ?? ''),
+      selection: alpha.selectionExpression ?? '',
+      combo: alpha.type === 'SUPER' ? (alpha.code ?? '') : '',
+      mode: 'FULL',
+      reserveCore: true,
+    }
+    setSettings(baseline.settings)
+    setRegular(baseline.regular)
+    setSelection(baseline.selection)
+    setCombo(baseline.combo)
     setMode('FULL')
     setReserveCore(true)
+    setSavedDraftSignature(JSON.stringify(baseline))
+    setDraftSaveError(null)
     setRecordId(null)
+  }
+  const saveDraft = () => {
+    if (!draftKey) return
+    try {
+      localStorage.setItem(draftKey, currentDraftSignature)
+      setSavedDraftSignature(currentDraftSignature)
+      setDraftSaveError(null)
+      toast.success('Focused simulation draft saved in this browser.')
+    } catch (error) {
+      setDraftSaveError(error)
+    }
   }
   const fieldChoices = (name: string) =>
     (options.data?.fields[name]?.choices ?? []).map((choice) => ({
@@ -313,6 +348,9 @@ export function FocusedSimulationScreen() {
         description="Edit a private simulation draft, then run it once. These changes do not update the saved Alpha on BRAIN."
         actions={
           <>
+            <Button variant="secondary" disabled={!hasUnsavedDraft} onClick={saveDraft}>
+              Save draft
+            </Button>
             <Button variant="secondary" disabled={!changedCount} onClick={resetDraft}>
               Reset draft
             </Button>
@@ -322,11 +360,17 @@ export function FocusedSimulationScreen() {
           </>
         }
       />
+      {draftSaveError !== null && (
+        <ErrorNotice error={draftSaveError} title="Could not save the focused simulation draft" />
+      )}
       {changedCount > 0 && (
         <Notice tone="info">
           Draft differs from the saved Alpha: {changedExpressions} expression
           {changedExpressions === 1 ? '' : 's'} and {changedSettings.length} setting
-          {changedSettings.length === 1 ? '' : 's'} changed. Draft is saved in this browser.
+          {changedSettings.length === 1 ? '' : 's'} changed.{' '}
+          {hasUnsavedDraft
+            ? 'Save draft to keep these edits in this browser.'
+            : 'Draft saved in this browser.'}
         </Notice>
       )}
       {page.data.problems.map((problem) => (
@@ -633,7 +677,7 @@ function FocusedExpressionEditor({
     queryFn: () => templateLab.options(),
     staleTime: 5 * 60_000,
   })
-  const reference: OperatorDoc[] = operators.data?.reference ?? []
+  const reference = operators.data?.reference ?? EMPTY_OPERATOR_DOCS
 
   return (
     <div className="flex flex-col gap-2">
@@ -669,11 +713,12 @@ function FocusedExpressionEditor({
           label={label}
           onChange={onChange}
           reference={reference}
-          presets={{}}
-          variables={{}}
-          infos={new Map()}
-          problems={[]}
+          presets={EMPTY_PRESETS}
+          variables={EMPTY_VARIABLES}
+          infos={EMPTY_VARIABLE_INFOS}
+          problems={EMPTY_PROBLEMS}
           scope={scope}
+          focusOnClick
         />
       )}
     </div>

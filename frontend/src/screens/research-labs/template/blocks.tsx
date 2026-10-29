@@ -12,7 +12,7 @@ import { createContext, type ReactNode, use, useState } from 'react'
 import { catalog } from '@/api/catalog'
 import type { Scope } from '@/api/types'
 import { cn } from '@/lib/cn'
-import { Button, Notice, Skeleton } from '@/ui/kit'
+import { Button, Input, Notice, Skeleton } from '@/ui/kit'
 import { type TreeNode, templateLab } from './api'
 import { GROUPS, inputsOf, type OperatorDoc, WORDS } from './fast-expression'
 
@@ -411,6 +411,8 @@ function Handle({
 }) {
   const ctx = useBlocks()
   const [open, setOpen] = useState(false)
+  const [number, setNumber] = useState(node.value)
+  const [choosing, setChoosing] = useState(false)
   const done = (next: TreeNode) => {
     ctx.change(put(ctx.root, path, next))
     setOpen(false)
@@ -419,7 +421,13 @@ function Handle({
   return (
     <Floating
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(next) => {
+        if (next) {
+          setNumber(node.value)
+          setChoosing(node.kind !== 'num')
+        }
+        setOpen(next)
+      }}
       trigger={
         <Popover.Trigger
           {...(title ? { title } : {})}
@@ -433,10 +441,41 @@ function Handle({
       }
     >
       <div className="flex w-80 max-w-full flex-col">
-        <p className="border-b border-hairline px-3 pt-2 pb-1.5 text-caption text-ink-subtle">
-          An operator wraps this block; anything else replaces it.
-        </p>
-        <BlockSearch onPick={(pick) => done(placed(pick, node))} />
+        {node.kind === 'num' && (
+          <form
+            className="flex items-center gap-2 border-b border-hairline p-2"
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (!NUMBER.test(number.trim())) return
+              done(numberNode(number.trim()))
+            }}
+          >
+            <Input
+              autoFocus
+              aria-label="Number value"
+              inputMode="decimal"
+              value={number}
+              onChange={(event) => setNumber(event.target.value)}
+            />
+            <Button size="sm" type="submit" disabled={!NUMBER.test(number.trim())}>
+              Apply
+            </Button>
+          </form>
+        )}
+        {choosing ? (
+          <>
+            <p className="border-b border-hairline px-3 pt-2 pb-1.5 text-caption text-ink-subtle">
+              An operator wraps this block; anything else replaces it.
+            </p>
+            <BlockSearch onPick={(pick) => done(placed(pick, node))} />
+          </>
+        ) : (
+          <div className="flex flex-wrap gap-2 border-b border-hairline p-2">
+            <Button size="sm" variant="secondary" onClick={() => setChoosing(true)}>
+              Replace or wrap
+            </Button>
+          </div>
+        )}
         <div className="flex flex-wrap gap-2 border-t border-hairline p-2">
           {node.kind === 'call' && (
             <Button

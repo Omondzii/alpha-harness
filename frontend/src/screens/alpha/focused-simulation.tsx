@@ -5,19 +5,24 @@ import { toast } from 'sonner'
 import { auth, simulations } from '@/api/core'
 import type { Scope } from '@/api/types'
 import { fmt, isNum } from '@/lib/format'
+import { neutralizationLabel, splitNeutralizations } from '@/lib/neutralization'
 import { DEFAULT_SCOPE, useScopeOptions } from '@/lib/scope'
 import { useDebounced } from '@/lib/use-debounced'
 import { SimulationSettingsFields, testPeriodOf } from '@/screens/research-labs/simulation-settings'
-import { templateLab } from '@/screens/research-labs/template/api'
+import {
+  INVESTABILITY_LABELS,
+  type Investability,
+  templateLab,
+} from '@/screens/research-labs/template/api'
 import { TemplateBlocks } from '@/screens/research-labs/template/blocks'
 import { TemplateEditor } from '@/screens/research-labs/template/editor'
 import type { OperatorDoc } from '@/screens/research-labs/template/fast-expression'
 import {
   Button,
+  Chips,
   ErrorNotice,
   Field,
   Fieldset,
-  Input,
   Metric,
   Notice,
   Page,
@@ -262,6 +267,39 @@ export function FocusedSimulationScreen() {
     }))
   const stringSetting = (name: string, fallback: string) =>
     typeof settings[name] === 'string' ? String(settings[name]) : fallback
+  const investability =
+    settings['maxPosition'] === 'ON'
+      ? 'max_position'
+      : settings['maxTrade'] === 'ON'
+        ? 'max_trade'
+        : 'none'
+  const investabilityChoices = (
+    [
+      {
+        value: 'none',
+        maxTrade: 'OFF',
+        maxPosition: 'OFF',
+      },
+      {
+        value: 'max_trade',
+        maxTrade: 'ON',
+        maxPosition: 'OFF',
+      },
+      ...(fieldChoices('maxPosition').some((choice) => choice.value === 'ON')
+        ? [
+            {
+              value: 'max_position',
+              maxTrade: 'OFF',
+              maxPosition: 'ON',
+            } as const,
+          ]
+        : []),
+    ] as const
+  ).filter(
+    (choice) =>
+      fieldChoices('maxTrade').some((item) => item.value === choice.maxTrade) &&
+      fieldChoices('maxPosition').some((item) => item.value === choice.maxPosition),
+  )
 
   return (
     <Page className="mx-auto w-full max-w-[96rem]">
@@ -355,18 +393,40 @@ export function FocusedSimulationScreen() {
             disabled={options.isPending || options.isError}
           />
         </Fieldset>
-        <Fieldset legend="Portfolio settings">
+        <Fieldset legend="Neutralization">
           {scopeOptions.neutralizations.length ? (
-            <Select
-              label="Neutralization"
-              value={stringSetting(
-                'neutralization',
-                scopeOptions.neutralizations[0]?.value ?? 'NONE',
-              )}
-              onChange={(value) => updateSetting('neutralization', value)}
-              items={scopeOptions.neutralizations}
-              disabled={options.isPending || options.isError}
-            />
+            <div className="flex flex-col gap-3">
+              {splitNeutralizations(scopeOptions.neutralizations).map(({ group, items }) => {
+                const current = stringSetting('neutralization', '')
+                const selected = items.some((item) => item.value === current) ? [current] : []
+                return (
+                  <div
+                    key={group.id}
+                    className="flex min-w-0 flex-col gap-2 rounded-md border border-hairline bg-surface-1 p-3"
+                  >
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-body font-medium text-ink">{group.label}</span>
+                      <span className="text-caption text-ink-subtle">
+                        {selected.length ? '1 selected' : 'Choose one'}
+                      </span>
+                    </div>
+                    <Chips
+                      label={group.label}
+                      items={items.map((item) => ({
+                        value: item.value,
+                        label: neutralizationLabel(item.value, item.label),
+                      }))}
+                      value={selected}
+                      onChange={(next) => {
+                        const value = next.at(-1)
+                        if (value) updateSetting('neutralization', value)
+                      }}
+                      disabled={options.isPending || options.isError}
+                    />
+                  </div>
+                )
+              })}
+            </div>
           ) : (
             <Skeleton className="h-8 w-64" label="Loading neutralizations" />
           )}
@@ -392,39 +452,43 @@ export function FocusedSimulationScreen() {
           legend="Investability"
           hint="Max Trade and Max Position cap positions by liquidity; BRAIN takes one at a time."
         >
-          <div className="flex flex-wrap gap-4">
-            {(['maxTrade', 'maxPosition'] as const).map((name) => {
-              const choices = fieldChoices(name)
-              const current = stringSetting(name, '')
-              const label = name === 'maxTrade' ? 'Max Trade' : 'Max Position'
-              return (
-                <Field key={name} label={label} className="min-w-52">
-                  {choices.length > 0 ? (
-                    <Select
-                      label={label}
-                      value={current}
-                      onChange={(value) => updateSetting(name, value)}
-                      items={[
-                        ...(!choices.some((item) => item.value === current) && current
-                          ? [{ value: current, label: `${current} (current)` }]
-                          : []),
-                        ...choices,
-                      ]}
-                      disabled={options.isPending || options.isError}
-                    />
-                  ) : (
-                    <Input
-                      type="text"
-                      aria-label={label}
-                      value={current}
-                      onChange={(event) => updateSetting(name, event.target.value)}
-                      disabled={options.isPending || options.isError}
-                    />
-                  )}
-                </Field>
-              )
-            })}
-          </div>
+          {investabilityChoices.length ? (
+            <div className="flex flex-col gap-2">
+              <Chips
+                label="Investability"
+                items={investabilityChoices.map((choice) => ({
+                  value: choice.value,
+                  label: INVESTABILITY_LABELS[choice.value as Investability],
+                }))}
+                value={
+                  investabilityChoices.some((choice) => choice.value === investability)
+                    ? [investability]
+                    : []
+                }
+                onChange={(next) => {
+                  const selected = next.at(-1)
+                  const choice = investabilityChoices.find((item) => item.value === selected)
+                  if (!choice) return
+                  setSettings((current) => ({
+                    ...current,
+                    maxTrade: choice.maxTrade,
+                    maxPosition: choice.maxPosition,
+                  }))
+                }}
+                disabled={options.isPending || options.isError}
+              />
+              {!investabilityChoices.some((choice) => choice.value === investability) && (
+                <Notice tone="warn">
+                  The current investability settings are not available for this market. Choose one
+                  of the options above.
+                </Notice>
+              )}
+            </div>
+          ) : options.isPending ? (
+            <Skeleton className="h-8 w-64" label="Loading investability options" />
+          ) : (
+            <Notice tone="warn">BRAIN did not provide compatible investability choices.</Notice>
+          )}
         </Fieldset>
         {fieldChoices('language').length > 0 && (
           <Field label="Expression language" className="max-w-72">

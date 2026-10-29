@@ -6,8 +6,7 @@ import { CopyIcon, MaximizeIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { catalog } from '@/api/catalog'
-import type { components } from '@/api/generated'
-import { ApiError, errorMessage, http } from '@/api/http'
+import { ApiError, errorMessage } from '@/api/http'
 import type { Scope } from '@/api/types'
 import { fmt, isNum } from '@/lib/format'
 import { alpha, notApplicable } from '@/screens/alpha/api'
@@ -96,6 +95,31 @@ function Section({
   )
 }
 
+function AlphaExpressions({
+  type,
+  expression,
+  selectionExpression,
+}: {
+  type: string | null
+  expression: string | null
+  selectionExpression: string | null
+}) {
+  if (type !== 'SUPER') return <AstInspector expression={expression} />
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2">
+        <h3 className="text-title">Selection Expression</h3>
+        <AstInspector expression={selectionExpression} />
+      </div>
+      <div className="flex flex-col gap-2">
+        <h3 className="text-title">Combo Expression</h3>
+        <AstInspector expression={expression} />
+      </div>
+    </div>
+  )
+}
+
 function Body({ alphaId }: { alphaId: string }) {
   const detail = useQuery({
     queryKey: ['pool', 'detail', alphaId],
@@ -109,16 +133,6 @@ function Body({ alphaId }: { alphaId: string }) {
     // Lazy load: only start fetching after detail is loaded
     enabled: detail.data !== undefined,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-  })
-  const submittedExpressions = useQuery({
-    queryKey: ['super-lab', 'submitted-expressions'],
-    queryFn: () =>
-      http.get<components['schemas']['SubmittedExpressions']>(
-        '/api/super-lab/submitted-expressions',
-      ),
-    enabled: page.data?.alpha.type === 'SUPER' && !page.data.alpha.selectionExpression,
-    retry: false,
-    staleTime: 5 * 60 * 1000,
   })
   const [kinds, setKinds] = useState<Kind[]>([])
   const navigate = useNavigate()
@@ -166,14 +180,15 @@ function Body({ alphaId }: { alphaId: string }) {
   if (detail.isError) return <ErrorNotice error={detail.error} title="Could not load this Alpha" />
   const d = detail.data
   const alphaInfo = page.data?.alpha
-  const selectionExpression =
-    alphaInfo?.selectionExpression ||
-    submittedExpressions.data?.selections.find((recipe) => recipe.sources.includes(alphaId))?.code
 
   if (page.isError) {
     return (
       <div className="flex flex-col gap-4">
-        <AstInspector expression={d.expression} />
+        <AlphaExpressions
+          type={d.type}
+          expression={d.expression}
+          selectionExpression={d.selectionExpression}
+        />
         <ErrorNotice error={page.error} title="Could not load alpha properties" />
         <div className="flex flex-wrap gap-2">
           <Button
@@ -251,31 +266,11 @@ function Body({ alphaId }: { alphaId: string }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {alphaInfo?.type === 'SUPER' ? (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <h3 className="text-title">Selection Expression</h3>
-            {selectionExpression ? (
-              <AstInspector expression={selectionExpression} />
-            ) : submittedExpressions.isPending ? (
-              <Skeleton className="h-12" label="Loading selection expression" />
-            ) : submittedExpressions.isError ? (
-              <ErrorNotice
-                error={submittedExpressions.error}
-                title="Could not load the selection expression"
-              />
-            ) : (
-              <Notice tone="info" title="No selection expression was found for this SuperAlpha." />
-            )}
-          </div>
-          <div className="flex flex-col gap-2">
-            <h3 className="text-title">Combo Expression</h3>
-            <AstInspector expression={d.expression} />
-          </div>
-        </div>
-      ) : (
-        <AstInspector expression={d.expression} />
-      )}
+      <AlphaExpressions
+        type={d.type}
+        expression={d.expression}
+        selectionExpression={d.selectionExpression}
+      />
       <AlphaDataFields
         fields={alphaInfo?.dataFields}
         settings={d.settings}

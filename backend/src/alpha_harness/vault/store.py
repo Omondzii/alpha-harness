@@ -83,9 +83,11 @@ def alpha_row(alpha: Alpha, fetched_at: datetime) -> tuple[Any, ...]:
     stats = alpha.in_sample
     settings = alpha.settings
     code = alpha.regular or alpha.combo or alpha.selection
+    selection = alpha.selection
     return (
         alpha.id,
         (code.code if code else None),
+        selection.code if selection else None,
         str(alpha.type) if alpha.type else None,
         settings.instrument_type if settings else None,
         settings.region if settings else None,
@@ -881,3 +883,11 @@ class AlphaVault:
             list(alpha_ids),
         )
         return {str(r["alpha_id"]): r for r in rows}
+
+    async def missing_selection_ids(self) -> list[str]:
+        """Stored SuperAlphas whose selection expression has not been captured yet."""
+        rows = await self.catalog.query(
+            "SELECT alpha_id FROM alpha WHERE sim_type = 'SUPER' "
+            "AND coalesce(trim(selection_expression), '') = '' ORDER BY date_created DESC"
+        )
+        return [str(row["alpha_id"]) for row in rows]

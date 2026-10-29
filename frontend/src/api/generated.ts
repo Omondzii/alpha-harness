@@ -2209,7 +2209,11 @@ export interface components {
             }[];
             /** Expression */
             expression: string | null;
+            /** Selectionexpression */
+            selectionExpression: string | null;
             settings: components["schemas"]["AlphaSettings"];
+            /** Type */
+            type: string | null;
         };
         /**
          * AlphaIds

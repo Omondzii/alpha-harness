@@ -154,7 +154,9 @@ class SyncStarted(Out):
 
 class AlphaDetail(Out):
     alpha_id: str
+    type: str | None
     expression: str | None
+    selection_expression: str | None
     settings: AlphaSettings
     checks: list[dict[str, Any]]
     brain_url: str
@@ -271,7 +273,9 @@ async def alpha_detail(alpha_id: str, state: State) -> AlphaDetail:
     return AlphaDetail.model_validate(
         {
             "alphaId": alpha_id,
+            "type": row.get("sim_type"),
             "expression": row.get("expression"),
+            "selectionExpression": row.get("selection_expression"),
             "settings": {
                 k: row.get(k)
                 for k in ("region", "universe", "delay", "neutralization", "decay", "truncation")

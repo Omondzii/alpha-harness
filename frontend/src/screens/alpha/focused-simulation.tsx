@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from '@tanstack/react-router'
+import { RefreshCwIcon } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { auth, simulations } from '@/api/core'
@@ -8,6 +9,8 @@ import { fmt, isNum } from '@/lib/format'
 import { neutralizationLabel, splitNeutralizations } from '@/lib/neutralization'
 import { DEFAULT_SCOPE, useScopeOptions } from '@/lib/scope'
 import { useDebounced } from '@/lib/use-debounced'
+import { pool } from '@/screens/pool/api'
+import { checkFigure } from '@/screens/pool/shared'
 import { SimulationSettingsFields, testPeriodOf } from '@/screens/research-labs/simulation-settings'
 import {
   INVESTABILITY_LABELS,
@@ -18,12 +21,13 @@ import { TemplateBlocks } from '@/screens/research-labs/template/blocks'
 import { TemplateEditor } from '@/screens/research-labs/template/editor'
 import type { OperatorDoc } from '@/screens/research-labs/template/fast-expression'
 import {
+  Badge,
   Button,
   Chips,
+  checkTone,
   ErrorNotice,
   Field,
   Fieldset,
-  Metric,
   Notice,
   Page,
   PageHeader,
@@ -34,7 +38,7 @@ import {
 } from '@/ui/kit'
 import { Select } from '@/ui/overlay'
 import { type ScopePart, ScopePicker } from '@/ui/scope-picker'
-import { checkName, verdictOf } from './analysis'
+import { isQuickMode } from './analysis'
 import type { AlphaView, SimulationRow } from './api'
 import { alpha as api } from './api'
 
@@ -227,6 +231,7 @@ export function FocusedSimulationScreen() {
 
   const isSuper = alpha.type === 'SUPER'
   const active = record.data ? ACTIVE.has(record.data.status) : false
+  const finished = Boolean(record.data && !active)
   const oneCoreOnly = ['GLB', 'ALL'].includes(String(settings['region'] ?? ''))
   const quickAllowed = engine.data?.quickAllowed === true
   const expressionsReady = isSuper
@@ -368,218 +373,245 @@ export function FocusedSimulationScreen() {
           </Field>
         )}
       </Panel>
-      <Panel
-        title="Simulation settings"
-        description="Familiar Template Lab controls. Your changes apply only to this run."
-        bodyClassName="flex flex-col gap-4"
-      >
-        {!settingsAreCurrent && <Skeleton className="h-8" label="Checking settings" />}
-        {options.isPending && settingsAreCurrent && (
-          <Skeleton className="h-8" label="Loading settings options" />
-        )}
-        {options.isError && (
-          <ErrorNotice error={options.error} title="Could not load valid settings" />
-        )}
-        {options.data?.problems.map((problem) => (
-          <Notice key={problem} tone="warn">
-            {problem}
-          </Notice>
-        ))}
-        <Fieldset legend="Market">
-          <ScopePicker
-            scope={scope}
-            onChange={updateScope}
-            parts={MARKET_PARTS}
-            disabled={options.isPending || options.isError}
-          />
-        </Fieldset>
-        <Fieldset legend="Neutralization">
-          {scopeOptions.neutralizations.length ? (
-            <div className="flex flex-col gap-3">
-              {splitNeutralizations(scopeOptions.neutralizations).map(({ group, items }) => {
-                const current = stringSetting('neutralization', '')
-                const selected = items.some((item) => item.value === current) ? [current] : []
-                return (
-                  <div
-                    key={group.id}
-                    className="flex min-w-0 flex-col gap-2 rounded-md border border-hairline bg-surface-1 p-3"
-                  >
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-body font-medium text-ink">{group.label}</span>
-                      <span className="text-caption text-ink-subtle">
-                        {selected.length ? '1 selected' : 'Choose one'}
-                      </span>
-                    </div>
-                    <Chips
-                      label={group.label}
-                      items={items.map((item) => ({
-                        value: item.value,
-                        label: neutralizationLabel(item.value, item.label),
-                      }))}
-                      value={selected}
-                      onChange={(next) => {
-                        const value = next.at(-1)
-                        if (value) updateSetting('neutralization', value)
-                      }}
-                      disabled={options.isPending || options.isError}
-                    />
-                  </div>
-                )
-              })}
-            </div>
-          ) : (
-            <Skeleton className="h-8 w-64" label="Loading neutralizations" />
-          )}
-        </Fieldset>
-        <SimulationSettingsFields
-          decay={String(settings['decay'] ?? 0)}
-          setDecay={(value) => updateSetting('decay', Math.max(0, Number(value) || 0))}
-          truncation={String(settings['truncation'] ?? 0.08)}
-          setTruncation={(value) => updateSetting('truncation', Number(value) || 0)}
-          pasteurization={stringSetting('pasteurization', 'ON') as 'ON' | 'OFF'}
-          setPasteurization={(value) => updateSetting('pasteurization', value)}
-          unitHandling={stringSetting('unitHandling', 'VERIFY')}
-          setUnitHandling={(value) => updateSetting('unitHandling', value)}
-          unitHandlingChoices={fieldChoices('unitHandling')}
-          nanHandling={stringSetting('nanHandling', 'ON') as 'ON' | 'OFF'}
-          setNanHandling={(value) => updateSetting('nanHandling', value)}
-          testYears={testYears}
-          setTestYears={(value) => updateSetting('testPeriod', testPeriodOf(value, testMonths))}
-          testMonths={testMonths}
-          setTestMonths={(value) => updateSetting('testPeriod', testPeriodOf(testYears, value))}
-        />
-        <Fieldset
-          legend="Investability"
-          hint="Max Trade and Max Position cap positions by liquidity; BRAIN takes one at a time."
-        >
-          {investabilityChoices.length ? (
-            <div className="flex flex-col gap-2">
-              <Chips
-                label="Investability"
-                items={investabilityChoices.map((choice) => ({
-                  value: choice.value,
-                  label: INVESTABILITY_LABELS[choice.value as Investability],
-                }))}
-                value={
-                  investabilityChoices.some((choice) => choice.value === investability)
-                    ? [investability]
-                    : []
-                }
-                onChange={(next) => {
-                  const selected = next.at(-1)
-                  const choice = investabilityChoices.find((item) => item.value === selected)
-                  if (!choice) return
-                  setSettings((current) => ({
-                    ...current,
-                    maxTrade: choice.maxTrade,
-                    maxPosition: choice.maxPosition,
-                  }))
-                }}
-                disabled={options.isPending || options.isError}
-              />
-              {!investabilityChoices.some((choice) => choice.value === investability) && (
-                <Notice tone="warn">
-                  The current investability settings are not available for this market. Choose one
-                  of the options above.
-                </Notice>
-              )}
-            </div>
-          ) : options.isPending ? (
-            <Skeleton className="h-8 w-64" label="Loading investability options" />
-          ) : (
-            <Notice tone="warn">BRAIN did not provide compatible investability choices.</Notice>
-          )}
-        </Fieldset>
-        {fieldChoices('language').length > 0 && (
-          <Field label="Expression language" className="max-w-72">
-            <Select
-              label="Expression language"
-              value={stringSetting('language', 'FASTEXPR')}
-              onChange={(value) => updateSetting('language', value)}
-              items={fieldChoices('language')}
-            />
-          </Field>
-        )}
-        {options.data?.missing.map((missing) => (
-          <Notice key={missing} tone="warn">
-            {missing}
-          </Notice>
-        ))}
-      </Panel>
-      <Panel
-        title="Run"
-        description="A focused run is submitted as one simulation, separately from research-task batches."
-        bodyClassName="flex flex-col gap-4"
-      >
-        <div className="flex flex-wrap items-center gap-4">
-          <Segmented
-            label="Simulation mode"
-            items={MODES.filter((item) => item.value !== 'QUICK' || quickAllowed)}
-            value={mode === 'QUICK' && !quickAllowed ? 'FULL' : mode}
-            onChange={setMode}
-          />
-          <label className="flex items-center gap-2 text-body-compact text-ink">
-            <input
-              type="checkbox"
-              checked={reserveCore}
-              onChange={(event) => setReserveCore(event.target.checked)}
-            />
-            Reserve one core for this run
-          </label>
-          <Button
-            variant="primary"
-            loading={run.isPending}
-            disabled={
-              active ||
-              !expressionsReady ||
-              !settingsReady ||
-              (mode === 'QUICK' && !quickAllowed) ||
-              (oneCoreOnly && reserveCore)
-            }
-            onClick={() => run.mutate()}
-          >
-            Run simulation
-          </Button>
-        </div>
-        {oneCoreOnly && reserveCore && (
-          <Notice tone="info">
-            This setting uses multiple BRAIN slots, so turn off core reservation to run it.
-          </Notice>
-        )}
-        {engine.isPending && <Skeleton className="h-6" label="Loading core status" />}
-        {engine.isError && <ErrorNotice error={engine.error} title="Could not read core status" />}
-        {run.isError && <ErrorNotice error={run.error} title="Could not queue the simulation" />}
-        {record.isError && (
-          <ErrorNotice error={record.error} title="Could not read simulation status" />
-        )}
-        {record.data && (
-          <SimulationResult
-            row={record.data}
-            active={active}
-            cancelling={cancel.isPending}
-            onCancel={() => cancel.mutate(record.data.id)}
-          />
-        )}
-        {cancel.isError && (
-          <ErrorNotice error={cancel.error} title="Could not cancel the simulation" />
-        )}
-      </Panel>
-      {resultAlphaId && (
+      <div className="grid items-stretch gap-4 lg:grid-cols-2">
         <Panel
-          title={`Simulation feedback · ${resultAlphaId}`}
-          description="BRAIN's result metrics and checks for the Alpha created by this run."
+          title="Simulation settings"
+          description="Familiar Template Lab controls. Your changes apply only to this run."
+          className="h-full"
           bodyClassName="flex flex-col gap-4"
         >
-          {result.isPending && <Skeleton className="h-32" label="Loading Alpha feedback" />}
-          {result.isError && (
-            <ErrorNotice
-              error={result.error}
-              title="Could not read the resulting Alpha from BRAIN"
-            />
+          {!settingsAreCurrent && <Skeleton className="h-8" label="Checking settings" />}
+          {options.isPending && settingsAreCurrent && (
+            <Skeleton className="h-8" label="Loading settings options" />
           )}
-          {result.data && <AlphaFeedback result={result.data} />}
+          {options.isError && (
+            <ErrorNotice error={options.error} title="Could not load valid settings" />
+          )}
+          {options.data?.problems.map((problem) => (
+            <Notice key={problem} tone="warn">
+              {problem}
+            </Notice>
+          ))}
+          <Fieldset legend="Market">
+            <div className="flex flex-wrap items-end gap-4">
+              <ScopePicker
+                scope={scope}
+                onChange={updateScope}
+                parts={MARKET_PARTS}
+                disabled={options.isPending || options.isError}
+              />
+              {fieldChoices('language').length > 0 && (
+                <Field label="Expression language" className="w-64">
+                  <Select
+                    label="Expression language"
+                    value={stringSetting('language', 'FASTEXPR')}
+                    onChange={(value) => updateSetting('language', value)}
+                    items={fieldChoices('language')}
+                    disabled={options.isPending || options.isError}
+                  />
+                </Field>
+              )}
+            </div>
+          </Fieldset>
+          <Fieldset legend="Neutralization">
+            {scopeOptions.neutralizations.length ? (
+              <div className="flex flex-col gap-3">
+                {splitNeutralizations(scopeOptions.neutralizations).map(({ group, items }) => {
+                  const current = stringSetting('neutralization', '')
+                  const selected = items.some((item) => item.value === current) ? [current] : []
+                  return (
+                    <div
+                      key={group.id}
+                      className="flex min-w-0 flex-col gap-2 rounded-md border border-hairline bg-surface-1 p-3"
+                    >
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-body font-medium text-ink">{group.label}</span>
+                        <span className="text-caption text-ink-subtle">
+                          {selected.length ? '1 selected' : 'Choose one'}
+                        </span>
+                      </div>
+                      <Chips
+                        label={group.label}
+                        items={items.map((item) => ({
+                          value: item.value,
+                          label: neutralizationLabel(item.value, item.label),
+                        }))}
+                        value={selected}
+                        onChange={(next) => {
+                          const value = next.at(-1)
+                          if (value) updateSetting('neutralization', value)
+                        }}
+                        disabled={options.isPending || options.isError}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <Skeleton className="h-8 w-64" label="Loading neutralizations" />
+            )}
+          </Fieldset>
+          <SimulationSettingsFields
+            decay={String(settings['decay'] ?? 0)}
+            setDecay={(value) => updateSetting('decay', Math.max(0, Number(value) || 0))}
+            truncation={String(settings['truncation'] ?? 0.08)}
+            setTruncation={(value) => updateSetting('truncation', Number(value) || 0)}
+            nanHandling={stringSetting('nanHandling', 'ON') as 'ON' | 'OFF'}
+            setNanHandling={(value) => updateSetting('nanHandling', value)}
+            testYears={testYears}
+            setTestYears={(value) => updateSetting('testPeriod', testPeriodOf(value, testMonths))}
+            testMonths={testMonths}
+            setTestMonths={(value) => updateSetting('testPeriod', testPeriodOf(testYears, value))}
+          />
+          <Fieldset
+            legend="Investability"
+            hint="Max Trade and Max Position cap positions by liquidity; BRAIN takes one at a time."
+          >
+            {investabilityChoices.length ? (
+              <div className="flex flex-col gap-2">
+                <Chips
+                  label="Investability"
+                  items={investabilityChoices.map((choice) => ({
+                    value: choice.value,
+                    label: INVESTABILITY_LABELS[choice.value as Investability],
+                  }))}
+                  value={
+                    investabilityChoices.some((choice) => choice.value === investability)
+                      ? [investability]
+                      : []
+                  }
+                  onChange={(next) => {
+                    const selected = next.at(-1)
+                    const choice = investabilityChoices.find((item) => item.value === selected)
+                    if (!choice) return
+                    setSettings((current) => ({
+                      ...current,
+                      maxTrade: choice.maxTrade,
+                      maxPosition: choice.maxPosition,
+                    }))
+                  }}
+                  disabled={options.isPending || options.isError}
+                />
+                {!investabilityChoices.some((choice) => choice.value === investability) && (
+                  <Notice tone="warn">
+                    The current investability settings are not available for this market. Choose one
+                    of the options above.
+                  </Notice>
+                )}
+              </div>
+            ) : options.isPending ? (
+              <Skeleton className="h-8 w-64" label="Loading investability options" />
+            ) : (
+              <Notice tone="warn">BRAIN did not provide compatible investability choices.</Notice>
+            )}
+          </Fieldset>
+          {options.data?.missing.map((missing) => (
+            <Notice key={missing} tone="warn">
+              {missing}
+            </Notice>
+          ))}
         </Panel>
-      )}
+        {finished && record.data ? (
+          <Panel
+            title="Simulation results"
+            description="Run status, Alpha feedback, and BRAIN checks."
+            className="h-full"
+            bodyClassName="flex max-h-[75vh] flex-col gap-4 overflow-y-auto"
+            actions={
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setRecordId(null)
+                  run.reset()
+                  cancel.reset()
+                }}
+              >
+                Run another
+              </Button>
+            }
+          >
+            <SimulationResult row={record.data} active={false} cancelling={false} />
+            {cancel.isError && (
+              <ErrorNotice error={cancel.error} title="Could not cancel the simulation" />
+            )}
+            {resultAlphaId && result.isPending && (
+              <Skeleton className="h-32" label="Loading Alpha feedback" />
+            )}
+            {resultAlphaId && result.isError && (
+              <ErrorNotice
+                error={result.error}
+                title="Could not read the resulting Alpha from BRAIN"
+              />
+            )}
+            {result.data && <AlphaFeedback result={result.data} />}
+          </Panel>
+        ) : (
+          <Panel
+            title="Run"
+            description="A focused run is submitted as one simulation, separately from research-task batches."
+            className="h-full"
+            bodyClassName="flex flex-col gap-4"
+          >
+            <div className="flex flex-wrap items-center gap-4">
+              <Segmented
+                label="Simulation mode"
+                items={MODES.filter((item) => item.value !== 'QUICK' || quickAllowed)}
+                value={mode === 'QUICK' && !quickAllowed ? 'FULL' : mode}
+                onChange={setMode}
+              />
+              <label className="flex items-center gap-2 text-body-compact text-ink">
+                <input
+                  type="checkbox"
+                  checked={reserveCore}
+                  onChange={(event) => setReserveCore(event.target.checked)}
+                />
+                Reserve one core for this run
+              </label>
+              <Button
+                variant="primary"
+                loading={run.isPending}
+                disabled={
+                  active ||
+                  !expressionsReady ||
+                  !settingsReady ||
+                  (mode === 'QUICK' && !quickAllowed) ||
+                  (oneCoreOnly && reserveCore)
+                }
+                onClick={() => run.mutate()}
+              >
+                Run simulation
+              </Button>
+            </div>
+            {oneCoreOnly && reserveCore && (
+              <Notice tone="info">
+                This setting uses multiple BRAIN slots, so turn off core reservation to run it.
+              </Notice>
+            )}
+            {engine.isPending && <Skeleton className="h-6" label="Loading core status" />}
+            {engine.isError && (
+              <ErrorNotice error={engine.error} title="Could not read core status" />
+            )}
+            {run.isError && (
+              <ErrorNotice error={run.error} title="Could not queue the simulation" />
+            )}
+            {record.isError && (
+              <ErrorNotice error={record.error} title="Could not read simulation status" />
+            )}
+            {record.data && (
+              <SimulationResult
+                row={record.data}
+                active={active}
+                cancelling={cancel.isPending}
+                onCancel={() => cancel.mutate(record.data.id)}
+              />
+            )}
+            {cancel.isError && (
+              <ErrorNotice error={cancel.error} title="Could not cancel the simulation" />
+            )}
+          </Panel>
+        )}
+      </div>
     </Page>
   )
 }
@@ -649,21 +681,26 @@ function FocusedExpressionEditor({
 }
 
 function AlphaFeedback({ result }: { result: AlphaView }) {
+  const queryClient = useQueryClient()
   const { alpha } = result
-  const stats = alpha.inSample
   const checks = alpha.checks
-  const verdict = verdictOf(alpha)
-  const verdictLabel = {
-    submitted: 'Submitted on BRAIN',
-    blocked: 'Not ready to submit',
-    pending: 'Checks pending',
-    ready: 'Ready to submit',
-  }[verdict.kind]
-  const passed = checks.filter((check) => check.result === 'PASS').length
-  const failed = checks.filter(
-    (check) => check.result === 'FAIL' || check.result === 'ERROR',
-  ).length
-  const pending = checks.filter((check) => !check.result || check.result === 'PENDING').length
+  const recheck = useMutation({
+    mutationFn: () => pool.check(alpha.alphaId),
+    onSuccess: (body) => {
+      const currentChecks = body.is?.checks ?? []
+      queryClient.setQueryData<AlphaView>(
+        ['focused-simulation', 'result-alpha', alpha.alphaId],
+        (current) =>
+          current ? { ...current, alpha: { ...current.alpha, checks: currentChecks } } : current,
+      )
+      const count = (state: string) =>
+        currentChecks.filter((check) => (check.result ?? 'PENDING') === state).length
+      toast.success(
+        `Checked ${alpha.alphaId}: ${count('PASS')} pass, ${count('FAIL')} fail, ${count('PENDING')} pending`,
+      )
+      void queryClient.invalidateQueries({ queryKey: ['alpha', alpha.alphaId, 'page'] })
+    },
+  })
 
   return (
     <>
@@ -672,60 +709,56 @@ function AlphaFeedback({ result }: { result: AlphaView }) {
           {problem}
         </Notice>
       ))}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Metric label="Sharpe" value={fmt.ratio(stats?.sharpe)} boxed />
-        <Metric label="Fitness" value={fmt.ratio(stats?.fitness)} boxed />
-        <Metric label="Turnover" value={fmt.pct(stats?.turnover, 2)} boxed />
-        <Metric label="Returns" value={fmt.pct(stats?.returns, 2)} boxed />
-      </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-body-compact text-ink-subtle">
-        <span>Verdict: {verdictLabel}</span>
-        <span>
-          Checks: {checks.length} reported · {passed} passed · {failed} failed · {pending} pending
-        </span>
-      </div>
-      {checks.length > 0 ? (
-        <ul className="divide-y divide-hairline rounded-sm border border-hairline">
-          {checks.map((check, index) => {
-            const state = check.result ?? 'PENDING'
-            const details = [
-              check.value != null &&
-                `Value: ${isNum(check.value) ? fmt.ratio(check.value, 3) : String(check.value)}`,
-              check.limit != null &&
-                `Limit: ${isNum(check.limit) ? fmt.ratio(check.limit, 3) : String(check.limit)}`,
-            ].filter(Boolean)
-            const tone =
-              state === 'PASS'
-                ? 'text-pnl-positive-text'
-                : state === 'FAIL' || state === 'ERROR'
-                  ? 'text-pnl-negative-text'
-                  : 'text-ink-subtle'
-            return (
+      <section className="flex flex-col gap-3 border-t border-hairline pt-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="flex flex-col gap-0.5">
+            <h3 className="text-title">Submission Checks</h3>
+            <p className="text-body-compact text-ink-subtle">
+              As BRAIN last reported them. Pending checks resolve with Re-check on BRAIN.
+            </p>
+          </div>
+          {!isQuickMode(alpha) && (
+            <Button size="sm" loading={recheck.isPending} onClick={() => recheck.mutate()}>
+              {!recheck.isPending && <RefreshCwIcon />}
+              Re-check on BRAIN
+            </Button>
+          )}
+        </div>
+        {recheck.isError && (
+          <ErrorNotice
+            error={recheck.error}
+            title={`Could not re-check ${alpha.alphaId} on BRAIN`}
+          />
+        )}
+        {checks.length === 0 ? (
+          <p className="text-body-compact text-ink-subtle">No checks stored.</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-hairline-subtle">
+            {checks.map((check, index) => (
               <li
                 key={`${check.name}-${index}`}
-                className="flex flex-wrap items-start justify-between gap-2 px-3 py-2"
+                className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-1.5 text-body"
               >
-                <div className="min-w-0">
-                  <div className="text-body-compact font-medium text-ink">
-                    {checkName(check.name)}
-                  </div>
-                  {check.message && (
-                    <div className="text-body-compact text-ink-subtle">{check.message}</div>
-                  )}
-                  {details.length > 0 && (
-                    <div className="text-caption text-ink-subtle">{details.join(' · ')}</div>
-                  )}
-                </div>
-                <div className={`flex shrink-0 gap-2 text-body-compact ${tone}`}>
-                  <span>{state}</span>
-                </div>
+                <Badge tone={checkTone(check.result ?? 'PENDING')}>
+                  {check.result ?? 'PENDING'}
+                </Badge>
+                <span className="num text-ink">{check.name}</span>
+                {isNum(check.value) && (
+                  <span className="num text-body-compact text-ink-subtle">
+                    {checkFigure(check.name, check.value)}
+                    {isNum(check.limit) && ` / ${checkFigure(check.name, check.limit)}`}
+                  </span>
+                )}
+                {check.message && (
+                  <span className="basis-full text-body-compact break-words text-ink-subtle">
+                    {check.message}
+                  </span>
+                )}
               </li>
-            )
-          })}
-        </ul>
-      ) : (
-        <Notice tone="info">BRAIN has not reported any checks for this Alpha yet.</Notice>
-      )}
+            ))}
+          </ul>
+        )}
+      </section>
     </>
   )
 }
@@ -739,7 +772,7 @@ function SimulationResult({
   row: SimulationRow
   active: boolean
   cancelling: boolean
-  onCancel: () => void
+  onCancel?: () => void
 }) {
   const statusLabel: Record<SimulationRow['status'], string> = {
     QUEUED: 'Waiting in Alpha Harness queue',
@@ -778,7 +811,7 @@ function SimulationResult({
             </Link>
           )}
         </div>
-        {active && (
+        {active && onCancel && (
           <Button size="sm" variant="secondary" loading={cancelling} onClick={onCancel}>
             Cancel
           </Button>
@@ -798,7 +831,6 @@ function SimulationResult({
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-caption text-ink-subtle">
         {row.createdAt && <span>Queued {fmt.dateTime(row.createdAt)}</span>}
         {row.submittedAt && <span>Submitted to BRAIN {fmt.dateTime(row.submittedAt)}</span>}
-        {row.finishedAt && <span>Finished {fmt.dateTime(row.finishedAt)}</span>}
         {!active && isNum(row.elapsedSeconds) && (
           <span>Elapsed {fmt.duration(row.elapsedSeconds)}</span>
         )}

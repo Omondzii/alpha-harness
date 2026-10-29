@@ -45,6 +45,7 @@ export const TOOL_TABS = [
   { tab: 'settings-sampler', label: 'Settings Sampler', to: '/tools/settings-sampler' },
   { tab: 'submission-planner', label: 'Submission Planner', to: '/tools/submission-planner' },
   { tab: 'correlation-breaker', label: 'Correlation Breaker', to: '/tools/correlation-breaker' },
+  { tab: 'focused-simulation', label: 'Focused Simulation', to: '/tools/focused-simulation' },
 ] as const
 
 /** `group` heads a run of items in the sidebar; empty sits above every heading. An item's

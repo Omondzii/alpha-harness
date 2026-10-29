@@ -127,6 +127,25 @@ const correlationBreaker = createRoute({
     'CorrelationBreakerScreen',
   ),
 })
+const focusedSimulationToolPicker = createRoute({
+  getParentRoute: () => tools,
+  path: 'focused-simulation',
+  validateSearch: (search: Record<string, unknown>) => ({
+    alpha: typeof search['alpha'] === 'string' ? search['alpha'] : undefined,
+  }),
+  component: lazyRouteComponent(
+    () => import('@/screens/tools/focused-simulation'),
+    'FocusedSimulationToolPickerScreen',
+  ),
+})
+const focusedSimulationTool = createRoute({
+  getParentRoute: () => tools,
+  path: 'focused-simulation/$alphaId',
+  component: lazyRouteComponent(
+    () => import('@/screens/alpha/focused-simulation'),
+    'FocusedSimulationToolScreen',
+  ),
+})
 
 const tasks = createRoute({ getParentRoute: () => root, path: '/tasks' })
 const tasksIndex = createRoute({
@@ -234,7 +253,14 @@ const routeTree = root.addChildren([
   matrix,
   data,
   labs.addChildren([labsIndex, searchLab, templateLab, evolutionLab, powerPoolLab, superAlphaLab]),
-  tools.addChildren([toolsIndex, settingsSampler, submissionPlanner, correlationBreaker]),
+  tools.addChildren([
+    toolsIndex,
+    settingsSampler,
+    submissionPlanner,
+    correlationBreaker,
+    focusedSimulationToolPicker,
+    focusedSimulationTool,
+  ]),
   competitionsRoute,
   tasks.addChildren([tasksIndex, taskResults]),
   pool.addChildren([poolIndex, poolTab]),

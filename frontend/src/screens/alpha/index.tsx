@@ -206,7 +206,7 @@ function Header({ alpha: a, fetchedAt }: { alpha: AlphaInfo; fetchedAt: string }
       <div className="flex flex-wrap items-center gap-3">
         <Button
           variant="primary"
-          render={<Link to="/focused-simulation/$alphaId" params={{ alphaId: a.alphaId }} />}
+          render={<Link to="/tools/focused-simulation/$alphaId" params={{ alphaId: a.alphaId }} />}
         >
           Focused simulation
         </Button>

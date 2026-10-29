@@ -85,6 +85,15 @@ function testPeriodParts(value: unknown): [string, string] {
 
 export function FocusedSimulationScreen() {
   const { alphaId } = useParams({ from: '/focused-simulation/$alphaId' })
+  return <FocusedSimulation alphaId={alphaId} />
+}
+
+export function FocusedSimulationToolScreen() {
+  const { alphaId } = useParams({ from: '/tools/focused-simulation/$alphaId' })
+  return <FocusedSimulation alphaId={alphaId} />
+}
+
+function FocusedSimulation({ alphaId }: { alphaId: string }) {
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<Mode>('FULL')
   const [reserveCore, setReserveCore] = useState(true)

@@ -76,6 +76,7 @@ export function AlphaScreen() {
       <Link
         to="/pool/$tab"
         params={{ tab: 'stored' }}
+        search={{ pyramids: undefined }}
         className="inline-flex w-fit items-center gap-1 px-1 text-body-compact text-ink-subtle hover:text-ink"
       >
         <ArrowLeftIcon className="size-3.5" aria-hidden />
@@ -202,9 +203,17 @@ function Header({ alpha: a, fetchedAt }: { alpha: AlphaInfo; fetchedAt: string }
           ))}
         </p>
       </div>
-      <span className="text-body-compact text-ink-subtle">
-        Read from BRAIN {fmt.ago(fetchedAt)}
-      </span>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="primary"
+          render={<Link to="/focused-simulation/$alphaId" params={{ alphaId: a.alphaId }} />}
+        >
+          Focused simulation
+        </Button>
+        <span className="text-body-compact text-ink-subtle">
+          Read from BRAIN {fmt.ago(fetchedAt)}
+        </span>
+      </div>
     </header>
   )
 }

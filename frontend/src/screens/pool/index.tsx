@@ -24,7 +24,12 @@ export function PoolScreen() {
     ) : (
       <Panel>
         <Empty title={`No tab called “${tab}”`}>
-          <Link to="/pool/$tab" params={{ tab: POOL_TABS[0].tab }} className={LINK}>
+          <Link
+            to="/pool/$tab"
+            params={{ tab: POOL_TABS[0].tab }}
+            search={{ pyramids: undefined }}
+            className={LINK}
+          >
             Go to {POOL_TABS[0].label}
           </Link>
         </Empty>
@@ -37,7 +42,12 @@ export function PoolScreen() {
       <AlphaCounts />
       <TabBar>
         {POOL_TABS.map((t) => (
-          <TabLink key={t.tab} to="/pool/$tab" params={{ tab: t.tab }}>
+          <TabLink
+            key={t.tab}
+            to="/pool/$tab"
+            params={{ tab: t.tab }}
+            search={{ pyramids: undefined }}
+          >
             {t.label}
           </TabLink>
         ))}

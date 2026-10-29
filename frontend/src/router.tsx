@@ -133,7 +133,12 @@ const tasksIndex = createRoute({
   getParentRoute: () => tasks,
   path: '/',
   validateSearch: (search: Record<string, unknown>) => ({
-    taskId: typeof search['taskId'] === 'number' ? search['taskId'] : typeof search['taskId'] === 'string' ? Number(search['taskId']) : undefined,
+    taskId:
+      typeof search['taskId'] === 'number'
+        ? search['taskId']
+        : typeof search['taskId'] === 'string'
+          ? Number(search['taskId'])
+          : undefined,
   }),
   component: lazyRouteComponent(() => import('@/screens/tasks'), 'TasksScreen'),
 })
@@ -157,9 +162,7 @@ const poolTab = createRoute({
   path: '$tab',
   validateSearch: (search: Record<string, unknown>) => {
     return {
-      pyramids: Array.isArray(search['pyramids'])
-        ? (search['pyramids'] as string[])
-        : undefined,
+      pyramids: Array.isArray(search['pyramids']) ? (search['pyramids'] as string[]) : undefined,
       ...(Array.isArray(search['pyramidIds'])
         ? { pyramidIds: search['pyramidIds'] as string[] }
         : {}),
@@ -178,6 +181,15 @@ const alpha = createRoute({
   getParentRoute: () => root,
   path: '/alpha/$alphaId',
   component: lazyRouteComponent(() => import('@/screens/alpha'), 'AlphaScreen'),
+})
+
+const alphaSimulation = createRoute({
+  getParentRoute: () => root,
+  path: '/focused-simulation/$alphaId',
+  component: lazyRouteComponent(
+    () => import('@/screens/alpha/focused-simulation'),
+    'FocusedSimulationScreen',
+  ),
 })
 
 // The screen belongs to ``/ai`` itself; the two routes below only carry the params it reads.
@@ -228,6 +240,7 @@ const routeTree = root.addChildren([
   pool.addChildren([poolIndex, poolTab]),
   portfolio,
   alpha,
+  alphaSimulation,
   ai.addChildren([aiIndex, aiTab, aiThread]),
   pyramids,
   sync,

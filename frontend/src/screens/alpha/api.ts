@@ -17,10 +17,18 @@ export type AlphaStats = Schemas['AlphaStats']
 export type AlphaYear = Schemas['AlphaYear']
 export type AlphaLineage = Schemas['AlphaLineage']
 export type AlphaProperties = Schemas['AlphaProperties']
+export type FocusSimulationAccepted = Schemas['FocusSimulationAccepted']
+export type SimulationRow = Schemas['SimulationRow']
 /** The Portfolio page's result shape, over a book of one — see `/api/alphas/{id}/after-cost`. */
 export type AfterCost = Schemas['PortfolioResult']
 
 export type CorrelationKind = 'self' | 'power-pool' | 'prod'
+
+export type FocusSimulationInput = {
+  mode: 'FULL' | 'QUICK'
+  reserveCore: boolean
+  settings: Record<string, unknown>
+} & ({ regular: string } | { selection: string; combo: string })
 
 /** `cached: false` only answers a `cached` read that found nothing kept. */
 export type Kept<T> = (T & { cached: true; fetchedAt: string }) | { cached: false }
@@ -50,6 +58,9 @@ export const alpha = {
     http.get<AlphaView>(`/api/alphas/${id(alphaId)}/page${qs({ refresh: refresh || null })}`),
   save: (alphaId: string, body: AlphaProperties) =>
     http.patch<AlphaInfo>(`/api/alphas/${id(alphaId)}`, body),
+  simulate: (alphaId: string, body: FocusSimulationInput) =>
+    http.post<FocusSimulationAccepted>(`/api/alphas/${id(alphaId)}/simulate`, body),
+  simulation: (recordId: number) => http.get<SimulationRow>(`/api/simulations/records/${recordId}`),
   correlation: (alphaId: string, kind: CorrelationKind, mode: Read) =>
     http.get<Correlation>(`/api/alphas/${id(alphaId)}/correlations/${kind}${read(mode)}`),
   performance: (alphaId: string, mode: Read) =>

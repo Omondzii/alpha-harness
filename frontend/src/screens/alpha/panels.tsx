@@ -751,7 +751,7 @@ export function LineagePanel({ lineage }: { lineage: AlphaLineage | null }) {
             : []),
           [
             'Task',
-            <Link key="task" to="/tasks" className={LINK}>
+            <Link key="task" to="/tasks" search={{ taskId: undefined }} className={LINK}>
               {lineage.taskName ?? lineage.task}
             </Link>,
           ],

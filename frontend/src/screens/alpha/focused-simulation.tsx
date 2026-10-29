@@ -424,10 +424,6 @@ export function FocusedSimulationScreen() {
           className="h-full"
           bodyClassName="flex flex-col gap-4"
         >
-          {!settingsAreCurrent && <Skeleton className="h-8" label="Checking settings" />}
-          {options.isPending && settingsAreCurrent && (
-            <Skeleton className="h-8" label="Loading settings options" />
-          )}
           {options.isError && (
             <ErrorNotice error={options.error} title="Could not load valid settings" />
           )}

@@ -140,6 +140,14 @@ export function AlphaActionsMenu({ alphaId }: { alphaId: string }) {
           onClick: () =>
             void navigate({ to: '/tools/settings-sampler', search: { alpha: alphaId } }),
         },
+        {
+          label: 'Focused Simulation',
+          onClick: () =>
+            void navigate({
+              to: '/tools/focused-simulation/$alphaId',
+              params: { alphaId },
+            }),
+        },
       ]}
     />
   )

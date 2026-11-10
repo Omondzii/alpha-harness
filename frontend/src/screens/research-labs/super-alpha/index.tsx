@@ -83,7 +83,7 @@ export function SuperAlphaLabScreen() {
   const [cores, setCores] = useState(3)
   const [selectionCode, setSelectionCode] = useState('')
   const [comboCode, setComboCode] = useState('')
-  const [customSelections, setCustomSelections] = useState<Schemas['Recipe'][]>([])
+  const [chosenSelections, setChosenSelections] = useState<string[]>([])
   const [customCombos, setCustomCombos] = useState<Schemas['Recipe'][]>([])
   const [expressionTab, setExpressionTab] = useState<'submitted' | 'custom'>('submitted')
   const [customExpressionType, setCustomExpressionType] = useState<'selection' | 'combo'>(
@@ -139,7 +139,7 @@ export function SuperAlphaLabScreen() {
     investability,
     activation,
     cores,
-    customSelections,
+    selectionExpressions: chosenSelections,
     customCombos,
   }
 
@@ -199,7 +199,7 @@ export function SuperAlphaLabScreen() {
   )
   const selectionExpressions = submitted.data?.selections ?? []
   const comboExpressions = submitted.data?.combos ?? []
-  const hasSelection = customSelections.length > 0
+  const hasSelection = chosenSelections.length > 0
   const hasCombo = customCombos.length > 0
   const ready =
     !agnostic &&
@@ -323,13 +323,13 @@ export function SuperAlphaLabScreen() {
               recipes={selectionExpressions}
               search={selectionSearch}
               onSearch={setSelectionSearch}
-              added={customSelections}
+              added={chosenSelections}
               onAdd={(recipe) =>
-                setCustomSelections((current) =>
-                  current.some((item) => item.code === recipe.code) ||
+                setChosenSelections((current) =>
+                  current.includes(recipe.code) ||
                   current.length >= MAX_CUSTOM_RECIPES
                     ? current
-                    : [...current, { name: recipe.name, code: recipe.code }],
+                    : [...current, recipe.code],
                 )
               }
             />
@@ -338,7 +338,7 @@ export function SuperAlphaLabScreen() {
               recipes={comboExpressions}
               search={comboSearch}
               onSearch={setComboSearch}
-              added={customCombos}
+              added={customCombos.map((recipe) => recipe.code)}
               onAdd={(recipe) =>
                 setCustomCombos((current) =>
                   current.some((item) => item.code === recipe.code) ||
@@ -395,18 +395,17 @@ export function SuperAlphaLabScreen() {
                 disabled={
                   !(customExpressionType === 'selection' ? selectionCode : comboCode).trim() ||
                   (customExpressionType === 'selection' &&
-                    customSelections.length >= MAX_CUSTOM_RECIPES) ||
+                    chosenSelections.length >= MAX_CUSTOM_RECIPES) ||
                   (customExpressionType === 'combo' && customCombos.length >= MAX_CUSTOM_RECIPES)
                 }
                 onClick={() => {
                   if (customExpressionType === 'selection') {
-                    setCustomSelections((current) => [
-                      ...current,
-                      {
-                        name: `Selection ${current.length + 1}`,
-                        code: selectionCode.trim(),
-                      },
-                    ])
+                    const expression = selectionCode.trim()
+                    setChosenSelections((current) =>
+                      current.includes(expression) || current.length >= MAX_CUSTOM_RECIPES
+                        ? current
+                        : [...current, expression],
+                    )
                     selectionRun.reset()
                     setSelectionCode('')
                   } else {
@@ -448,10 +447,10 @@ export function SuperAlphaLabScreen() {
               </>
             )}
             {customExpressionType === 'selection' ? (
-              <CustomRecipes
-                recipes={customSelections}
-                onRemove={(index) =>
-                  setCustomSelections((current) => current.filter((_, i) => i !== index))
+              <SelectedExpressions
+                expressions={chosenSelections}
+                onRemove={(expression) =>
+                  setChosenSelections((current) => current.filter((item) => item !== expression))
                 }
               />
             ) : (
@@ -602,7 +601,10 @@ export function SuperAlphaLabScreen() {
         description="Every selected expression with every selected combo runs at the settings shown. Each runs in Full mode, so BRAIN's own checks say which are submittable: those show green in Tasks and reach the Submission Planner."
       >
         {plan.isError && <ErrorNotice error={plan.error} title="Could not plan the task" />}
-        {plan.data && (
+        {plan.isPlaceholderData && (
+          <p className="text-body-compact text-ink-subtle">Updating task preview…</p>
+        )}
+        {plan.data && !plan.isPlaceholderData && (
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-4">
               <Metric boxed label="SuperAlpha Simulations" value={fmt.int(plan.data.simulations)} />
@@ -637,8 +639,8 @@ export function SuperAlphaLabScreen() {
               />
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
-              <Disclosure summary={`Selections (${plan.data.selections.length})`}>
-                <Recipes recipes={plan.data.selections} />
+              <Disclosure summary={`Selections (${plan.data.selectionExpressions.length})`}>
+                <SelectedExpressions expressions={plan.data.selectionExpressions} />
               </Disclosure>
               <Disclosure summary={`Combos (${plan.data.combos.length})`}>
                 <Recipes recipes={plan.data.combos} />
@@ -646,7 +648,7 @@ export function SuperAlphaLabScreen() {
             </div>
             <Notice
               tone="info"
-              title="Each selection caps an Alpha's operators at 8,000 divided by the Selection Limit, so the selected Alphas never pass BRAIN's 8,000-operator ceiling. Submitting stays on BRAIN, with a description of the selection and the combo."
+              title="Your selection expressions are sent to BRAIN as entered. Selection Limit controls how many Alphas BRAIN selects; it does not change the expressions."
             />
           </div>
         )}
@@ -667,7 +669,7 @@ function ExpressionCatalog({
   recipes: Schemas['SubmittedExpression'][]
   search: string
   onSearch: (value: string) => void
-  added: Schemas['Recipe'][]
+  added: string[]
   onAdd: (recipe: Schemas['SubmittedExpression']) => void
 }) {
   const query = search.trim().toLocaleLowerCase()
@@ -702,7 +704,7 @@ function ExpressionCatalog({
           </p>
         ) : (
           matching.map((recipe) => {
-            const isAdded = added.some((item) => item.code === recipe.code)
+            const isAdded = added.includes(recipe.code)
             const canAdd = added.length < MAX_CUSTOM_RECIPES
             const source = recipe.sources[0]?.split(' · ').at(-1)
             const copy = async () => {
@@ -790,6 +792,43 @@ function CustomRecipes({
             >
               <XIcon />
             </Button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function SelectedExpressions({
+  expressions,
+  onRemove,
+}: {
+  expressions: string[]
+  onRemove?: (expression: string) => void
+}) {
+  if (expressions.length === 0) return null
+  return (
+    <section className="w-full border-t border-hairline pt-3">
+      <ul className="flex flex-col divide-y divide-hairline-subtle">
+        {expressions.map((expression) => (
+          <li
+            key={expression}
+            className="flex items-start justify-between gap-3 py-2"
+          >
+            <code className="num min-w-0 whitespace-pre-wrap break-all text-caption text-ink-muted">
+              {expression}
+            </code>
+            {onRemove && (
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Remove selection expression"
+                title="Remove selection expression"
+                onClick={() => onRemove(expression)}
+              >
+                <XIcon />
+              </Button>
+            )}
           </li>
         ))}
       </ul>

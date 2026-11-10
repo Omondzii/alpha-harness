@@ -5040,8 +5040,8 @@ export interface components {
             selectedNeutralizations: string[];
             /** Selecteduniverses */
             selectedUniverses: string[];
-            /** Selections */
-            selections: components["schemas"]["Recipe"][];
+            /** Selectionexpressions */
+            selectionExpressions: string[];
             /** Simulations */
             simulations: number;
             /** Testperiod */
@@ -5068,8 +5068,6 @@ export interface components {
             cores: number;
             /** Customcombos */
             customCombos?: components["schemas"]["Recipe"][];
-            /** Customselections */
-            customSelections?: components["schemas"]["Recipe"][];
             /**
              * Decay
              * @default 0
@@ -5100,6 +5098,8 @@ export interface components {
              * @default false
              */
             run: boolean;
+            /** Selectionexpressions */
+            selectionExpressions?: string[];
             /**
              * Selectionlimit
              * @default 30

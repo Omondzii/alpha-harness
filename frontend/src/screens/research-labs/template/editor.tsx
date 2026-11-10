@@ -652,8 +652,9 @@ export function TemplateEditor({
   value,
   label = 'Template',
   maxLength,
+  focusOnClick = false,
   ...rest
-}: Live & { value: string; label?: string; maxLength?: number }) {
+}: Live & { value: string; label?: string; maxLength?: number; focusOnClick?: boolean }) {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const live = useRef<Live>(rest)
@@ -703,6 +704,14 @@ export function TemplateEditor({
   useEffect(() => {
     view.current?.dispatch({ effects: recolour.of(null) })
   }, [market])
+
+  useEffect(() => {
+    const element = host.current
+    if (!focusOnClick || !element) return
+    const restoreFocus = () => requestAnimationFrame(() => view.current?.focus())
+    element.addEventListener('click', restoreFocus)
+    return () => element.removeEventListener('click', restoreFocus)
+  }, [focusOnClick])
 
   return <div ref={host} className="overflow-hidden rounded-md border border-hairline-strong" />
 }

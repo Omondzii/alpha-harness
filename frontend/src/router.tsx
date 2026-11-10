@@ -127,13 +127,37 @@ const correlationBreaker = createRoute({
     'CorrelationBreakerScreen',
   ),
 })
+const focusedSimulationToolPicker = createRoute({
+  getParentRoute: () => tools,
+  path: 'focused-simulation',
+  validateSearch: (search: Record<string, unknown>) => ({
+    alpha: typeof search['alpha'] === 'string' ? search['alpha'] : undefined,
+  }),
+  component: lazyRouteComponent(
+    () => import('@/screens/tools/focused-simulation'),
+    'FocusedSimulationToolPickerScreen',
+  ),
+})
+const focusedSimulationTool = createRoute({
+  getParentRoute: () => tools,
+  path: 'focused-simulation/$alphaId',
+  component: lazyRouteComponent(
+    () => import('@/screens/alpha/focused-simulation'),
+    'FocusedSimulationToolScreen',
+  ),
+})
 
 const tasks = createRoute({ getParentRoute: () => root, path: '/tasks' })
 const tasksIndex = createRoute({
   getParentRoute: () => tasks,
   path: '/',
   validateSearch: (search: Record<string, unknown>) => ({
-    taskId: typeof search['taskId'] === 'number' ? search['taskId'] : typeof search['taskId'] === 'string' ? Number(search['taskId']) : undefined,
+    taskId:
+      typeof search['taskId'] === 'number'
+        ? search['taskId']
+        : typeof search['taskId'] === 'string'
+          ? Number(search['taskId'])
+          : undefined,
   }),
   component: lazyRouteComponent(() => import('@/screens/tasks'), 'TasksScreen'),
 })
@@ -157,9 +181,7 @@ const poolTab = createRoute({
   path: '$tab',
   validateSearch: (search: Record<string, unknown>) => {
     return {
-      pyramids: Array.isArray(search['pyramids'])
-        ? (search['pyramids'] as string[])
-        : undefined,
+      pyramids: Array.isArray(search['pyramids']) ? (search['pyramids'] as string[]) : undefined,
       ...(Array.isArray(search['pyramidIds'])
         ? { pyramidIds: search['pyramidIds'] as string[] }
         : {}),
@@ -178,6 +200,15 @@ const alpha = createRoute({
   getParentRoute: () => root,
   path: '/alpha/$alphaId',
   component: lazyRouteComponent(() => import('@/screens/alpha'), 'AlphaScreen'),
+})
+
+const alphaSimulation = createRoute({
+  getParentRoute: () => root,
+  path: '/focused-simulation/$alphaId',
+  component: lazyRouteComponent(
+    () => import('@/screens/alpha/focused-simulation'),
+    'FocusedSimulationScreen',
+  ),
 })
 
 // The screen belongs to ``/ai`` itself; the two routes below only carry the params it reads.
@@ -222,12 +253,20 @@ const routeTree = root.addChildren([
   matrix,
   data,
   labs.addChildren([labsIndex, searchLab, templateLab, evolutionLab, powerPoolLab, superAlphaLab]),
-  tools.addChildren([toolsIndex, settingsSampler, submissionPlanner, correlationBreaker]),
+  tools.addChildren([
+    toolsIndex,
+    settingsSampler,
+    submissionPlanner,
+    correlationBreaker,
+    focusedSimulationToolPicker,
+    focusedSimulationTool,
+  ]),
   competitionsRoute,
   tasks.addChildren([tasksIndex, taskResults]),
   pool.addChildren([poolIndex, poolTab]),
   portfolio,
   alpha,
+  alphaSimulation,
   ai.addChildren([aiIndex, aiTab, aiThread]),
   pyramids,
   sync,

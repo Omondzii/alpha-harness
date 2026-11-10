@@ -1,5 +1,7 @@
 # BRAIN Credentials and Local Settings.
 .env
+frontend/.env
+~/.env
 
 # References for Development
 CLAUDE.md

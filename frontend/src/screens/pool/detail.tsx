@@ -95,6 +95,31 @@ function Section({
   )
 }
 
+function AlphaExpressions({
+  type,
+  expression,
+  selectionExpression,
+}: {
+  type: string | null
+  expression: string | null
+  selectionExpression: string | null
+}) {
+  if (type !== 'SUPER') return <AstInspector expression={expression} />
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2">
+        <h3 className="text-title">Selection Expression</h3>
+        <AstInspector expression={selectionExpression} />
+      </div>
+      <div className="flex flex-col gap-2">
+        <h3 className="text-title">Combo Expression</h3>
+        <AstInspector expression={expression} />
+      </div>
+    </div>
+  )
+}
+
 function Body({ alphaId }: { alphaId: string }) {
   const detail = useQuery({
     queryKey: ['pool', 'detail', alphaId],
@@ -159,7 +184,11 @@ function Body({ alphaId }: { alphaId: string }) {
   if (page.isError) {
     return (
       <div className="flex flex-col gap-4">
-        <AstInspector expression={d.expression} />
+        <AlphaExpressions
+          type={d.type}
+          expression={d.expression}
+          selectionExpression={d.selectionExpression}
+        />
         <ErrorNotice error={page.error} title="Could not load alpha properties" />
         <div className="flex flex-wrap gap-2">
           <Button
@@ -237,7 +266,11 @@ function Body({ alphaId }: { alphaId: string }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <AstInspector expression={d.expression} />
+      <AlphaExpressions
+        type={d.type}
+        expression={d.expression}
+        selectionExpression={d.selectionExpression}
+      />
       <AlphaDataFields
         fields={alphaInfo?.dataFields}
         settings={d.settings}

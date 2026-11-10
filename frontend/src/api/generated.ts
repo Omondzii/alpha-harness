@@ -168,6 +168,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/alphas/{alpha_id}/simulate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Simulate Alpha
+         * @description Queue edited Alpha expressions and settings without changing the saved Alpha.
+         */
+        post: operations["simulate_alpha_api_alphas__alpha_id__simulate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/alphas/{alpha_id}/submit": {
         parameters: {
             query?: never;
@@ -1562,6 +1582,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/simulations/records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Simulation Record
+         * @description One simulation's saved state, including its terminal result.
+         */
+        get: operations["simulation_record_api_simulations_records__record_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/simulations/{record_id}/cancel": {
         parameters: {
             query?: never;
@@ -2209,7 +2249,11 @@ export interface components {
             }[];
             /** Expression */
             expression: string | null;
+            /** Selectionexpression */
+            selectionExpression: string | null;
             settings: components["schemas"]["AlphaSettings"];
+            /** Type */
+            type: string | null;
         };
         /**
          * AlphaIds
@@ -2239,6 +2283,8 @@ export interface components {
             code: string | null;
             /** Color */
             color: string | null;
+            /** Combodescription */
+            comboDescription: string | null;
             /** Datafields */
             dataFields: string[] | null;
             /** Datecreated */
@@ -2259,6 +2305,10 @@ export interface components {
             operators: string[] | null;
             /** Powerpooloperators */
             powerPoolOperators: number | null;
+            /** Selectiondescription */
+            selectionDescription: string | null;
+            /** Selectionexpression */
+            selectionExpression: string | null;
             /** Settings */
             settings: {
                 [key: string]: unknown;
@@ -2376,10 +2426,14 @@ export interface components {
             category?: string | null;
             /** Color */
             color?: string | null;
+            /** Combodescription */
+            comboDescription?: string | null;
             /** Description */
             description?: string | null;
             /** Name */
             name?: string | null;
+            /** Selectiondescription */
+            selectionDescription?: string | null;
             /** Tags */
             tags?: string[];
         };
@@ -3106,6 +3160,8 @@ export interface components {
             slots: number;
             /** Slotsfree */
             slotsFree: number;
+            /** Slotsreserved */
+            slotsReserved: number;
             /** Slotsused */
             slotsUsed: number;
         };
@@ -3332,6 +3388,41 @@ export interface components {
             kind: "fields";
             /** Vector Operators */
             vector_operators?: string[];
+        };
+        /** FocusSimulationAccepted */
+        FocusSimulationAccepted: {
+            /** Recordid */
+            recordId: number;
+            /** Reserved */
+            reserved: boolean;
+            /** Status */
+            status: string;
+            /** Task */
+            task: string | null;
+        };
+        /** FocusSimulationRequest */
+        FocusSimulationRequest: {
+            /** Combo */
+            combo?: string | null;
+            /**
+             * Mode
+             * @default FULL
+             * @enum {string}
+             */
+            mode: "FULL" | "QUICK";
+            /** Regular */
+            regular?: string | null;
+            /**
+             * Reservecore
+             * @default true
+             */
+            reserveCore: boolean;
+            /** Selection */
+            selection?: string | null;
+            /** Settings */
+            settings: {
+                [key: string]: unknown;
+            };
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -5953,6 +6044,41 @@ export interface operations {
             };
         };
     };
+    simulate_alpha_api_alphas__alpha_id__simulate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alpha_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FocusSimulationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FocusSimulationAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     submit_alpha_api_alphas__alpha_id__submit_post: {
         parameters: {
             query?: never;
@@ -8007,6 +8133,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DropResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    simulation_record_api_simulations_records__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimulationRow"];
                 };
             };
             /** @description Validation Error */

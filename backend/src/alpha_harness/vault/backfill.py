@@ -239,6 +239,7 @@ class Backfill:
                 )
                 results = page.get("results") or []
                 alphas = [Alpha.model_validate(raw) for raw in results]
+                alphas = await self._with_selection_expressions(alphas)
                 await self.vault.save_alphas(alphas)
                 # A region-agnostic parent has no PnL of its own: its submitted children do.
                 ids.extend(a.id for a in alphas if a.type != SimulationType.RA_PARENT)
@@ -282,6 +283,18 @@ class Backfill:
         imported = 0
         try:
             imported = await self._import_alphas(task, since=since)
+            missing = await self.vault.missing_selection_ids()
+            failed = await self.fetch_each(
+                task,
+                missing,
+                self._fetch_selection_expression,
+                what="Fetching SuperAlpha selection expressions",
+            )
+            if failed:
+                raise RuntimeError(
+                    f"Could not fetch selection expressions for {len(failed)} SuperAlphas. "
+                    "Sync again to retry."
+                )
             await self.tasks.finish(task)
             self.last = {"state": "done", "imported": imported, "finishedAt": _now()}
             log.info("vault.backfill_done", alphas=imported)
@@ -327,6 +340,7 @@ class Backfill:
                 break
 
             alphas = [Alpha.model_validate(raw) for raw in results]
+            alphas = await self._with_selection_expressions(alphas)
             await self.vault.save_alphas(alphas)
             # Reported on failure too, so "stopped after 1,050" is visible, not just "stopped".
             imported += len(alphas)
@@ -353,6 +367,14 @@ class Backfill:
                 before, offset = bound, 0
 
         return imported
+
+    async def _fetch_selection_expression(self, alpha_id: str) -> int:
+        alpha = await self.endpoints.get_alpha(alpha_id)
+        if alpha.type != SimulationType.SUPER or not alpha.selection or not alpha.selection.code:
+            log.warning("vault.selection_missing", alpha_id=alpha_id)
+            return 0
+        await self.vault.save_alpha(alpha)
+        return 1
 
     async def fetch_returns(self, alpha_id: str) -> int:
         """Fetch and store one alpha's daily PnL and turnover.
@@ -461,6 +483,7 @@ class Backfill:
                     break
             complete = list(found.values())
             if complete:
+                complete = await self._with_selection_expressions(complete)
                 await self.vault.save_alphas(complete)
         # Anything the page could not provide is read one by one below.
         except Exception:
@@ -494,6 +517,31 @@ class Backfill:
         if follow and children:
             log.info("vault.capture_children", parents=len(complete), children=len(children))
             await self._capture_batch(children, follow=False)
+
+    async def _with_selection_expressions(self, alphas: list[Alpha]) -> list[Alpha]:
+        """Fill selections omitted from list responses before writing SuperAlphas locally."""
+        missing = [
+            alpha
+            for alpha in alphas
+            if alpha.type == SimulationType.SUPER
+            and (alpha.selection is None or not alpha.selection.code)
+        ]
+        if not missing:
+            return alphas
+
+        gate = asyncio.Semaphore(CAPTURE_CONCURRENCY)
+
+        async def complete(alpha: Alpha) -> Alpha:
+            async with gate:
+                full = await self.endpoints.get_alpha(alpha.id)
+            if not full.selection or not full.selection.code:
+                log.warning("vault.selection_missing", alpha_id=alpha.id)
+                return alpha
+            return alpha.model_copy(update={"selection": full.selection})
+
+        fetched = await asyncio.gather(*(complete(alpha) for alpha in missing))
+        completed = {alpha.id: alpha for alpha in fetched}
+        return [completed.get(alpha.id, alpha) for alpha in alphas]
 
     async def _capture_one(self, alpha_id: str) -> Alpha | None:
         try:

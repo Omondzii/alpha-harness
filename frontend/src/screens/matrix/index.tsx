@@ -156,6 +156,12 @@ function SimulationMatrix() {
               </span>
               cores busy
             </span>
+            {status.slotsReserved > 0 && (
+              <span className={STATUS}>
+                <span className="num text-ink">{fmt.int(status.slotsReserved)}</span>
+                reserved
+              </span>
+            )}
             <span className={STATUS}>
               <span className="num text-ink">{fmt.int(status.queuedTotal)}</span>
               queued

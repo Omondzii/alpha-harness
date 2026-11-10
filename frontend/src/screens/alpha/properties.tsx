@@ -54,6 +54,8 @@ interface Draft {
   color: string
   tags: string
   description: string
+  selectionDescription: string
+  comboDescription: string
 }
 
 const draftOf = (a: AlphaInfo): Draft => ({
@@ -62,11 +64,14 @@ const draftOf = (a: AlphaInfo): Draft => ({
   color: a.color ?? 'NONE',
   tags: a.tags.join(', '),
   description: a.description ?? '',
+  selectionDescription: a.selectionDescription ?? '',
+  comboDescription: a.comboDescription ?? '',
 })
 
 export function PropertiesPanel({ alpha }: { alpha: AlphaInfo }) {
   const queryClient = useQueryClient()
   const saved = draftOf(alpha)
+  const isSuper = alpha.type === 'SUPER'
   const [draft, setDraft] = useState<Draft>(saved)
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved)
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
@@ -77,10 +82,20 @@ export function PropertiesPanel({ alpha }: { alpha: AlphaInfo }) {
     mutationFn: async () => {
       // BRAIN drops an empty description from the request rather than clearing it, so refuse
       // the save instead of reporting one that never happened.
-      if (saved.description.trim() && !draft.description.trim()) {
+      if (!isSuper && saved.description.trim() && !draft.description.trim()) {
         throw new Error(
           'BRAIN keeps a description once it is set and cannot clear it. Write a new one ' +
             'instead. Nothing was saved.',
+        )
+      }
+      if (
+        isSuper &&
+        ((saved.selectionDescription.trim() && !draft.selectionDescription.trim()) ||
+          (saved.comboDescription.trim() && !draft.comboDescription.trim()))
+      ) {
+        throw new Error(
+          'BRAIN keeps expression descriptions once set and cannot clear them. Write new ' +
+            'descriptions instead. Nothing was saved.',
         )
       }
       return api.save(alpha.alphaId, {
@@ -91,7 +106,12 @@ export function PropertiesPanel({ alpha }: { alpha: AlphaInfo }) {
           .split(',')
           .map((t) => t.trim())
           .filter(Boolean),
-        description: draft.description,
+        ...(isSuper
+          ? {
+              selectionDescription: draft.selectionDescription,
+              comboDescription: draft.comboDescription,
+            }
+          : { description: draft.description }),
       })
     },
     onSuccess: (info) => {
@@ -106,6 +126,8 @@ export function PropertiesPanel({ alpha }: { alpha: AlphaInfo }) {
   })
 
   const length = draft.description.trim().length
+  const selectionLength = draft.selectionDescription.trim().length
+  const comboLength = draft.comboDescription.trim().length
 
   return (
     <Panel
@@ -192,42 +214,91 @@ export function PropertiesPanel({ alpha }: { alpha: AlphaInfo }) {
           </div>
         </fieldset>
       </div>
-      <div className="flex flex-col gap-1.5">
-        <Field
-          label="Description"
-          hint={
-            <>
-              Power Pool Alphas need{' '}
-              <span
-                className={cn(
-                  'num',
-                  length >= MINIMUM ? 'text-pnl-positive-text' : 'text-ink-muted',
-                )}
-              >
-                {length} of {MINIMUM}
-              </span>{' '}
-              characters: the idea, and why these data and operators.
-            </>
-          }
-        >
-          <Textarea
-            rows={6}
-            value={draft.description}
-            onChange={(e) => set('description', e.target.value)}
-            placeholder="Idea, rationale for data used, rationale for operators used"
+      {isSuper ? (
+        <div className="grid gap-4">
+          <ExpressionDescription
+            label="Description of Selection Expression"
+            value={draft.selectionDescription}
+            length={selectionLength}
+            onChange={(value) => set('selectionDescription', value)}
           />
-        </Field>
-        {!draft.description.trim() && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="self-start"
-            onClick={() => set('description', template(alpha))}
+          <ExpressionDescription
+            label="Description of Combo Expression"
+            value={draft.comboDescription}
+            length={comboLength}
+            onChange={(value) => set('comboDescription', value)}
+          />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <Field
+            label="Description"
+            hint={
+              <>
+                Power Pool Alphas need{' '}
+                <span
+                  className={cn(
+                    'num',
+                    length >= MINIMUM ? 'text-pnl-positive-text' : 'text-ink-muted',
+                  )}
+                >
+                  {length} of {MINIMUM}
+                </span>{' '}
+                characters: the idea, and why these data and operators.
+              </>
+            }
           >
-            Use the Power Pool template
-          </Button>
-        )}
-      </div>
+            <Textarea
+              rows={6}
+              value={draft.description}
+              onChange={(e) => set('description', e.target.value)}
+              placeholder="Idea, rationale for data used, rationale for operators used"
+            />
+          </Field>
+          {!draft.description.trim() && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="self-start"
+              onClick={() => set('description', template(alpha))}
+            >
+              Use the Power Pool template
+            </Button>
+          )}
+        </div>
+      )}
     </Panel>
+  )
+}
+
+function ExpressionDescription({
+  label,
+  value,
+  length,
+  onChange,
+}: {
+  label: string
+  value: string
+  length: number
+  onChange: (value: string) => void
+}) {
+  return (
+    <Field
+      label={label}
+      hint={
+        <span
+          className={cn('num', length >= MINIMUM ? 'text-pnl-positive-text' : 'text-ink-muted')}
+        >
+          {length} / {MINIMUM} characters minimum
+        </span>
+      }
+    >
+      <Textarea
+        rows={3}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Notes"
+      />
+    </Field>
   )
 }

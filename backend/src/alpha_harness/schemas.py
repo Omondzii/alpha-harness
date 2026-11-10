@@ -90,6 +90,8 @@ class EngineStatus(Out):
     #: 10, or 1 without the MULTI_SIMULATION permission.
     max_batch: int
     slots_used: int
+    #: Scheduler slots currently held for one focused Alpha simulation.
+    slots_reserved: int
     slots_free: int
     #: Task name -> queued simulations.
     queued: dict[str, int]

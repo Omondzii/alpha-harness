@@ -22,7 +22,10 @@ class NotStarted extends Error {}
 export function useAddTask(add: () => Promise<AddedTask>) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const openTasks = { label: 'Open Tasks', onClick: () => void navigate({ to: '/tasks' }) }
+  const openTasks = {
+    label: 'Open Tasks',
+    onClick: () => void navigate({ to: '/tasks', search: { taskId: undefined } }),
+  }
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ['lab-tasks'] })
     void queryClient.invalidateQueries({ queryKey: ['today'] })

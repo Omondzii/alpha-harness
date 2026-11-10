@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 
 const profile = process.env['ALPHA_HARNESS_PROFILE']
 if (profile && !/^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/.test(profile)) {
@@ -36,6 +36,12 @@ if (!Number.isInteger(frontendPort) || frontendPort < 1 || frontendPort > 65535)
 }
 const BACKEND = `http://127.0.0.1:${backendPort}`
 
+const localEnv = loadEnv('', import.meta.dirname, '')
+const extraAllowedHosts = (localEnv['ALPHA_HARNESS_ALLOWED_HOSTS'] ?? '')
+  .split(',')
+  .map((host) => host.trim())
+  .filter(Boolean)
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -53,6 +59,7 @@ export default defineConfig({
   server: {
     port: frontendPort,
     strictPort: true,
+    allowedHosts: extraAllowedHosts,
     proxy: {
       '/api': { target: BACKEND, changeOrigin: true },
       '/ws': { target: BACKEND, ws: true, changeOrigin: true },

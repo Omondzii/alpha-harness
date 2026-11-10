@@ -15,6 +15,7 @@ import contextlib
 import dataclasses
 import itertools
 import time
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -30,11 +31,12 @@ from ..brain.errors import (
     BrainValidationError,
 )
 from ..brain.filters import platform_midnight
-from ..brain.schemas import QUICK_MODE, SimulationRequest
+from ..brain.schemas import QUICK_MODE, SimulationRequest, SimulationType
 from ..db.models import ACTIVE, DedupEntry, SimStatus, SimulationRecord, Study, TaskQuota, utcnow
 from ..tasks import spawn
 from .awake import StayAwake
 from .lifecycle import (
+    GLB_REGION,
     SLOT_COST,
     Outcome,
     SubmissionFailed,
@@ -88,6 +90,9 @@ SLEEP_GAP = 60.0
 #: lab task. It has no study by design, so it is the one task exempt from the orphan sweep.
 MANUAL_TASK = "manual"
 
+#: Focused Alpha runs reserve one scheduler slot and dispatch as single simulations.
+FOCUSED_TASK_PREFIX = "focused:"
+
 #: Hashes per duplicate lookup in :meth:`BatchEngine.enqueue`.
 ENQUEUE_CHUNK = 500
 
@@ -136,6 +141,7 @@ class BatchEngine:
         #: Monotonic time of BRAIN's quota reset; the flag clears once it passes.
         self._limit_resets_at: float | None = None
         self._enqueue_lock = asyncio.Lock()
+        self._focus_lock = asyncio.Lock()
         #: Reads finished batches back beside the scheduling round; at most one at a time.
         self._expansion: asyncio.Task[None] | None = None
         #: Child platform id -> (body, outcome) of a finished child not yet written to its
@@ -300,6 +306,77 @@ class BatchEngine:
         await self.tracker.notify()
         return {"queued": queued, "skipped": skipped, "outcomes": outcomes}
 
+    async def enqueue_focused(self, request: SimulationRequest) -> tuple[str, dict[str, Any]]:
+        """Queue one unbatched Alpha run while reserving one slot for it."""
+        if request.settings.region == GLB_REGION or request.type == SimulationType.REGION_AGNOSTIC:
+            raise ValueError("A dedicated core supports one-slot simulations only.")
+
+        async with self._focus_lock:
+            await self._release_finished_focus_reservations()
+            quotas = await self.quotas()
+            if any(name.startswith(FOCUSED_TASK_PREFIX) for name in quotas):
+                raise RuntimeError("A focused simulation already holds the reserved core.")
+
+            task = f"{FOCUSED_TASK_PREFIX}{uuid.uuid4().hex}"
+            async with self.db.session() as session:
+                session.add(TaskQuota(name=task, max_slots=1, enabled=True))
+            try:
+                outcome = await self.enqueue([request], task=task)
+            except Exception:
+                await self._delete_focus_quota(task)
+                raise
+
+            if not outcome["queued"]:
+                await self._delete_focus_quota(task)
+            return task, outcome
+
+    async def release_focused(self, task: str) -> tuple[int, bool]:
+        """Drop a focused run before dispatch, or keep its reservation until it finishes."""
+        if not task.startswith(FOCUSED_TASK_PREFIX):
+            raise ValueError("Not a focused simulation task.")
+        dropped = await self.drop_queued(task)
+        async with self.db.session() as session:
+            in_flight = await self._in_flight_by_task(session)
+        held = in_flight.get(task, 0) > 0
+        if not held:
+            await self._delete_focus_quota(task)
+        return dropped, held
+
+    async def _delete_focus_quota(self, task: str) -> None:
+        async with self.db.session() as session:
+            await session.execute(delete(TaskQuota).where(TaskQuota.name == task))
+
+    async def _release_finished_focus_reservations(self) -> None:
+        """Return reserved slots when focused runs have completed or been cancelled."""
+        async with self.db.session() as session:
+            reservations = list(
+                await session.scalars(
+                    select(TaskQuota).where(TaskQuota.name.like(f"{FOCUSED_TASK_PREFIX}%"))
+                )
+            )
+            for reservation in reservations:
+                task = reservation.name
+                has_work = await session.scalar(
+                    select(
+                        select(SimulationRecord.id)
+                        .where(
+                            SimulationRecord.task == task,
+                            SimulationRecord.status.in_(
+                                [SimStatus.QUEUED, SimStatus.PENDING, SimStatus.RUNNING]
+                            ),
+                        )
+                        .exists()
+                    )
+                )
+                has_history = await session.scalar(
+                    select(
+                        select(SimulationRecord.id).where(SimulationRecord.task == task).exists()
+                    )
+                )
+                abandoned_before_queueing = reservation.created_at < utcnow() - timedelta(minutes=1)
+                if not has_work and (has_history or abandoned_before_queueing):
+                    await session.execute(delete(TaskQuota).where(TaskQuota.name == task))
+
     async def drop_queued(self, task: str | None = None) -> int:
         """Discard queued work that has not been sent anywhere yet.
 
@@ -452,17 +529,26 @@ class BatchEngine:
             )
 
         used = sum(in_flight.values())
+        quotas = await self.quotas()
+        focus_tasks = {
+            task
+            for task, limit in quotas.items()
+            if task.startswith(FOCUSED_TASK_PREFIX) and limit > 0
+        }
+        reserved = len(focus_tasks)
+        reserved_idle = max(0, reserved - sum(in_flight.get(task, 0) for task in focus_tasks))
         per_minute = (recent or 0) / (RATE_WINDOW.total_seconds() / 60)
         waiting = sum(queued.values())
         return {
             "slots": self.slots,
             "maxBatch": self.max_batch,
             "slotsUsed": used,
-            "slotsFree": max(0, self.slots - used),
+            "slotsReserved": reserved,
+            "slotsFree": max(0, self.slots - used - reserved_idle),
             "queued": queued,
             "queuedTotal": sum(queued.values()),
             "inFlight": in_flight,
-            "quotas": await self.quotas(),
+            "quotas": quotas,
             "dailyLimitHit": self._daily_limit_hit,
             "sessionLost": self._session_lost,
             "awake": self._awake.state,
@@ -506,6 +592,7 @@ class BatchEngine:
         later round.
         """
         submitted = await self._fill_slots()
+        await self._release_finished_focus_reservations()
         if self._expansion is None or self._expansion.done():
             self._expansion = spawn(self._expand_finished_batches(), name="batch-expand")
         return submitted
@@ -533,16 +620,56 @@ class BatchEngine:
             self._last_orphan_sweep = now
             await self.disown_orphans()
 
+        quotas = await self.quotas()
+        focus_tasks = {
+            task
+            for task, limit in quotas.items()
+            if task.startswith(FOCUSED_TASK_PREFIX) and limit > 0
+        }
+        focused_submitted = 0
         async with self.db.session() as session:
             in_flight = await self._in_flight_by_task(session)
-            free = self.slots - sum(in_flight.values())
-            if free <= 0:
-                return 0
+            physical_free = self.slots - sum(in_flight.values())
+            focused = (
+                (
+                    await session.scalars(
+                        select(SimulationRecord)
+                        .where(
+                            SimulationRecord.status == SimStatus.QUEUED,
+                            SimulationRecord.task.in_(focus_tasks),
+                        )
+                        .order_by(SimulationRecord.id)
+                        .limit(1)
+                    )
+                ).first()
+                if focus_tasks
+                else None
+            )
 
-            # Only the head of each task's queue: no round can send more than
-            # ``free * max_batch`` rows for one task, and loading the whole backlog every
-            # tick would make scheduling cost grow with the queue.
-            window = free * self.max_batch
+        if focused is not None and physical_free > 0:
+            focused_item = WorkItem(
+                record_id=focused.id,
+                key=key_of(focused.payload or {}),
+                task=focused.task,
+                payload=focused.payload or {},
+            )
+            focused_submitted = int(await self._submit_single(focused_item))
+            async with self.db.session() as session:
+                in_flight = await self._in_flight_by_task(session)
+
+        physical_free = self.slots - sum(in_flight.values())
+        reserved_idle = max(
+            0, len(focus_tasks) - sum(in_flight.get(task, 0) for task in focus_tasks)
+        )
+        free = physical_free - reserved_idle
+        if free <= 0:
+            return focused_submitted
+
+        # Only the head of each task's queue: no round can send more than
+        # ``free * max_batch`` rows for one task, and loading the whole backlog every
+        # tick would make scheduling cost grow with the queue.
+        window = free * self.max_batch
+        async with self.db.session() as session:
             position = (
                 select(
                     SimulationRecord.id,
@@ -550,7 +677,10 @@ class BatchEngine:
                     .over(partition_by=SimulationRecord.task, order_by=SimulationRecord.id)
                     .label("position"),
                 )
-                .where(SimulationRecord.status == SimStatus.QUEUED)
+                .where(
+                    SimulationRecord.status == SimStatus.QUEUED,
+                    SimulationRecord.task.not_in(focus_tasks) if focus_tasks else True,
+                )
                 .subquery()
             )
             queued = (
@@ -562,7 +692,7 @@ class BatchEngine:
                 )
             ).all()
             if not queued:
-                return 0
+                return focused_submitted
 
             items = [
                 WorkItem(
@@ -574,13 +704,12 @@ class BatchEngine:
                 for r in queued
             ]
 
-        quotas = await self.quotas()
         demand = demand_by_task(items, self.max_batch)
         allocation = allocate_slots(
             free, demand=demand, quotas=quotas, in_flight=in_flight, lend=self.lend_idle_cores
         )
         if not allocation:
-            return 0
+            return focused_submitted
 
         batches = pack(
             items,
@@ -600,7 +729,7 @@ class BatchEngine:
 
         if submitted:
             await self.tracker.notify()
-        return submitted
+        return focused_submitted + submitted
 
     # -- submission ------------------------------------------------------
 

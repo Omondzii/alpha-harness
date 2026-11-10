@@ -146,7 +146,11 @@ export function EvolutionLabScreen() {
       draft.seedIds,
       '/labs/evolution',
     )
-    void navigate({ to: '/pool/$tab', params: { tab: 'stored' } })
+    void navigate({
+      to: '/pool/$tab',
+      params: { tab: 'stored' },
+      search: { pyramids: undefined },
+    })
   }
 
   const current = marketKey(draft)

@@ -35,6 +35,15 @@ async def active(state: State) -> list[SimulationRow]:
     return [SimulationRow.model_validate(serialise(r)) for r in await state.tracker.active()]
 
 
+@router.get("/simulations/records/{record_id}")
+async def simulation_record(record_id: int, state: State) -> SimulationRow:
+    """One simulation's saved state, including its terminal result."""
+    record = await state.tracker.get(record_id)
+    if record is None:
+        raise HTTPException(404, "No such simulation")
+    return SimulationRow.model_validate(serialise(record))
+
+
 @router.post("/simulations/{record_id}/cancel")
 async def cancel(record_id: int, state: State) -> CancelResult:
     """Cancel a running simulation.

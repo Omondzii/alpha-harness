@@ -107,6 +107,7 @@ CREATE INDEX IF NOT EXISTS ix_set_tuple
 CREATE TABLE IF NOT EXISTS alpha (
     alpha_id          VARCHAR PRIMARY KEY,
     expression        VARCHAR,
+    selection_expression VARCHAR,
     sim_type          VARCHAR,
     instrument_type   VARCHAR,
     region            VARCHAR,
@@ -131,6 +132,7 @@ CREATE TABLE IF NOT EXISTS alpha (
     checks            VARCHAR,
     fetched_at        TIMESTAMP
 );
+ALTER TABLE alpha ADD COLUMN IF NOT EXISTS selection_expression VARCHAR;
 
 -- Computed from alpha_pnl on demand, so it survives re-imports of the alpha row.
 ALTER TABLE alpha ADD COLUMN IF NOT EXISTS name VARCHAR;
@@ -262,6 +264,7 @@ CATEGORY_COLUMNS = (
 ALPHA_COLUMNS = (
     "alpha_id",
     "expression",
+    "selection_expression",
     "sim_type",
     "instrument_type",
     "region",

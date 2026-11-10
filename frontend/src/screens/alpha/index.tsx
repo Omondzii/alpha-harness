@@ -76,6 +76,7 @@ export function AlphaScreen() {
       <Link
         to="/pool/$tab"
         params={{ tab: 'stored' }}
+        search={{ pyramids: undefined }}
         className="inline-flex w-fit items-center gap-1 px-1 text-body-compact text-ink-subtle hover:text-ink"
       >
         <ArrowLeftIcon className="size-3.5" aria-hidden />
@@ -202,9 +203,17 @@ function Header({ alpha: a, fetchedAt }: { alpha: AlphaInfo; fetchedAt: string }
           ))}
         </p>
       </div>
-      <span className="text-body-compact text-ink-subtle">
-        Read from BRAIN {fmt.ago(fetchedAt)}
-      </span>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="primary"
+          render={<Link to="/tools/focused-simulation/$alphaId" params={{ alphaId: a.alphaId }} />}
+        >
+          Focused simulation
+        </Button>
+        <span className="text-body-compact text-ink-subtle">
+          Read from BRAIN {fmt.ago(fetchedAt)}
+        </span>
+      </div>
     </header>
   )
 }
@@ -233,13 +242,23 @@ function ExpressionPanel({ alpha: a }: { alpha: AlphaInfo }) {
   const shown = SETTING_LABELS.filter(
     ([k]) => a.settings[k] !== undefined && a.settings[k] !== null,
   )
+  const isSuper = a.type === 'SUPER'
   return (
     <Panel
-      title="Expression"
+      title={isSuper ? 'Expressions' : 'Expression'}
       description={isNum(a.operatorCount) ? `${a.operatorCount} operators` : undefined}
       bodyClassName="flex flex-col gap-4"
     >
-      <AstInspector expression={a.code} className="text-body" />
+      {isSuper && (
+        <div className="flex flex-col gap-2">
+          <h3 className="text-title">Selection Expression</h3>
+          <AstInspector expression={a.selectionExpression} className="text-body" />
+        </div>
+      )}
+      <div className="flex flex-col gap-2">
+        {isSuper && <h3 className="text-title">Combo Expression</h3>}
+        <AstInspector expression={a.code} className="text-body" />
+      </div>
       <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
         {shown.map(([k, label]) => (
           <div key={k} className="flex min-w-0 flex-col gap-0.5">

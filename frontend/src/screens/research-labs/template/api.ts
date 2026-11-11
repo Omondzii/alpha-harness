@@ -33,6 +33,7 @@ export const INVESTABILITY_LABELS: Record<Investability, string> = {
 }
 
 export type TemplateLabOptions = Schemas['TemplateLabOptions']
+export type OperatorScope = 'REGULAR' | 'SELECTION' | 'COMBO'
 export type TemplateLabPreview = Schemas['TemplateLabPreview']
 export type VariableInfo = Schemas['VariableInfo']
 export type TemplateStats = Schemas['TemplateStats']
@@ -75,8 +76,10 @@ const B = '/api/template-lab'
 
 export const templateLab = {
   /** `refresh` syncs the account's operators from BRAIN first. */
-  options: (refresh = false) =>
-    http.get<TemplateLabOptions>(`${B}/options${qs({ refresh: refresh || undefined })}`),
+  options: (refresh = false, scope: OperatorScope = 'REGULAR') =>
+    http.get<TemplateLabOptions>(
+      `${B}/options${qs({ refresh: refresh || undefined, scope: scope === 'REGULAR' ? undefined : scope })}`,
+    ),
   templates: () => http.get<{ templates: TemplateSummary[] }>(`${B}/templates`),
   create: (body: TemplateBody) => http.post<TemplateSummary>(`${B}/templates`, body),
   update: (id: number, body: TemplateBody) =>

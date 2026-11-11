@@ -8351,6 +8351,7 @@ export interface operations {
         parameters: {
             query?: {
                 refresh?: boolean;
+                scope?: "REGULAR" | "SELECTION" | "COMBO";
             };
             header?: never;
             path?: never;

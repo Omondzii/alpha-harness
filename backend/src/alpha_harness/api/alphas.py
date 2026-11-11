@@ -583,18 +583,9 @@ async def simulate_alpha(
                 "super_alpha_expression_missing",
                 "A SuperAlpha simulation requires both selection and combo expressions.",
             )
-        for label, expression in (
-            ("Selection", body.selection),
-            ("Combo", body.combo),
-        ):
-            try:
-                parse(expression)
-            except ParseError as exc:
-                raise refuse(
-                    422,
-                    "simulation_expression_invalid",
-                    f"{label} expression is invalid: {exc}",
-                ) from exc
+        # SuperAlpha expressions have their own operators and combo syntax (including
+        # generated-stat references) that the regular Fast Expression parser cannot read.
+        # Send them through unchanged and let BRAIN validate them, as the SuperAlpha Lab does.
         request = SimulationRequest(
             type=SimulationType.SUPER,
             settings=settings,

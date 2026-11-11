@@ -214,10 +214,14 @@ class TemplateLabPreview(Out):
 
 
 @router.get("/options")
-async def options(state: State, refresh: bool = False) -> TemplateLabOptions:
+async def options(
+    state: State,
+    refresh: bool = False,
+    scope: Literal["REGULAR", "SELECTION", "COMBO"] = "REGULAR",
+) -> TemplateLabOptions:
     """What a template can use on this account."""
     operators = await account_operators(state, refresh=refresh)
-    regular = operator_table(operators)
+    available = operator_table(operators, scope)
     return TemplateLabOptions.model_validate(
         {
             "operators": operators_read(operators),
@@ -229,7 +233,7 @@ async def options(state: State, refresh: bool = False) -> TemplateLabOptions:
                     "description": str(o.get("description") or ""),
                 }
                 for o in operators
-                if o.get("name") in regular
+                if o.get("name") in available
             ],
             "presets": template.PRESETS,
             "vector": list(search.catalogue(operators).vector),

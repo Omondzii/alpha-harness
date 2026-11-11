@@ -13,7 +13,11 @@ import { AddTaskButtons, useAddTask } from '@/screens/research-labs/add-task'
 import { NeutralizationPicker } from '@/screens/research-labs/neutralization'
 import { SimulationSettingsFields, testPeriodOf } from '@/screens/research-labs/simulation-settings'
 import { CoresSetting } from '@/screens/research-labs/task-settings'
-import { INVESTABILITY_LABELS, templateLab } from '@/screens/research-labs/template/api'
+import {
+  INVESTABILITY_LABELS,
+  type OperatorScope,
+  templateLab,
+} from '@/screens/research-labs/template/api'
 import { ExpressionCode, TemplateEditor } from '@/screens/research-labs/template/editor'
 import {
   Button,
@@ -179,9 +183,10 @@ export function SuperAlphaLabScreen() {
       http.get<Schemas['SubmittedExpressions']>('/api/super-lab/submitted-expressions'),
     enabled: false,
   })
+  const operatorScope: OperatorScope = customExpressionType === 'selection' ? 'SELECTION' : 'COMBO'
   const templateOptions = useQuery({
-    queryKey: ['template-lab', 'options'],
-    queryFn: () => templateLab.options(),
+    queryKey: ['template-lab', 'options', operatorScope],
+    queryFn: () => templateLab.options(false, operatorScope),
     staleTime: 5 * 60_000,
   })
   const selectedInvestability = plan.data?.selectedInvestability ?? []

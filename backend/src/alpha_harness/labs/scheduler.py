@@ -20,6 +20,7 @@ from . import ga, search, template, template_v1
 from .objectives import StudyNotFoundError
 from .params import (
     CORRELATION_BREAKER,
+    DECAY_SWEEP,
     GA_SAMPLER,
     POWER_POOL_SAMPLER,
     SEARCH_SAMPLER,
@@ -326,7 +327,7 @@ async def advance(optimizer: Optimizer, study_id: int) -> int:
 
         return await power_pool.refill(optimizer, row, want, waiting)
     # Both write every simulation up front, so both are drained the same way.
-    if row.sampler in (SETTINGS_SAMPLER, CORRELATION_BREAKER, SUPER_LAB):
+    if row.sampler in (SETTINGS_SAMPLER, CORRELATION_BREAKER, DECAY_SWEEP, SUPER_LAB):
         from ..tools import settings_sampler  # same cycle: it builds on this module
 
         return await settings_sampler.refill(optimizer, row, want, waiting)

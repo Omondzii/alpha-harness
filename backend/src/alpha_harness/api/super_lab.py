@@ -1,7 +1,7 @@
 """Super Alpha Lab: one form, one task of SuperAlphas from your own submitted Alphas."""
 
 import asyncio
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter
 from pydantic import Field
@@ -31,6 +31,9 @@ class Recipe(Out):
     code: str = Field(min_length=1, max_length=2000)
 
 
+SelectionExpression = Annotated[str, Field(min_length=1, max_length=2000)]
+
+
 class SuperTask(Out):
     region: str
     delay: int
@@ -47,13 +50,15 @@ class SuperTask(Out):
     #: ``BOTH`` runs every pairing under each Component Activation.
     activation: Literal["IS", "OS", "BOTH"] = "BOTH"
     cores: int = Field(default=MAX_CORES, ge=1, le=MAX_CORES)
-    custom_selections: list[Recipe] = Field(default_factory=list, max_length=MAX_CUSTOM_RECIPES)
+    selection_expressions: list[SelectionExpression] = Field(
+        default_factory=list, max_length=MAX_CUSTOM_RECIPES
+    )
     custom_combos: list[Recipe] = Field(default_factory=list, max_length=MAX_CUSTOM_RECIPES)
     run: bool = False
 
 
 class SuperPlan(Out):
-    selections: list[Recipe]
+    selection_expressions: list[str]
     combos: list[Recipe]
     universes: list[str]
     selected_universes: list[str]
@@ -195,26 +200,13 @@ def _activations(choice: str) -> list[str]:
     return ["IS", "OS"] if choice == "BOTH" else [choice]
 
 
-def _selection_code(code: str, limit: int) -> str:
-    cap = super_alpha.OPERATOR_LIMIT // limit
-    return f"(operator_count <= {cap}) * max(0, ({code.strip()}))"
-
-
-def _recipes(body: SuperTask) -> tuple[list[super_alpha.Recipe], list[super_alpha.Recipe]]:
-    selections: list[super_alpha.Recipe] = []
+def _combos(body: SuperTask) -> list[super_alpha.Recipe]:
     combos: list[super_alpha.Recipe] = []
-    for index, recipe in enumerate(body.custom_selections, 1):
-        selections.append(
-            super_alpha.Recipe(
-                f"Custom selection {index} · {recipe.name}",
-                _selection_code(recipe.code, body.selection_limit),
-            )
-        )
     for index, recipe in enumerate(body.custom_combos, 1):
         combos.append(
             super_alpha.Recipe(f"Custom combo {index} · {recipe.name}", recipe.code.strip())
         )
-    return selections, combos
+    return combos
 
 
 @router.post("/selection")
@@ -239,7 +231,8 @@ async def run_selection(body: SelectionRun, state: State) -> SelectionCount:
 async def plan(body: SuperTask, state: State) -> SuperPlan:
     """What a task with these settings would run, without running anything."""
     activations = _activations(body.activation)
-    selections, combos = _recipes(body)
+    selections = body.selection_expressions
+    combos = _combos(body)
     schema = await state.metadata.cached_settings_schema()
     legal = legal_choices(schema, body.region, body.delay)
     universes = await synced_universes(
@@ -268,7 +261,7 @@ async def plan(body: SuperTask, state: State) -> SuperPlan:
     if not selected_investability:
         problems.append("Choose at least one Investability.")
     return SuperPlan(
-        selections=[Recipe(name=r.name, code=r.code) for r in selections],
+        selection_expressions=selections,
         combos=[Recipe(name=r.name, code=r.code) for r in combos],
         universes=universes,
         selected_universes=selected_universes,
@@ -298,7 +291,8 @@ async def add_task(body: SuperTask, state: State) -> AddedTask:
     """Write every pairing as a SuperAlpha simulation, and queue the task when ``run``."""
     if body.region == "ALL":
         raise refuse(422, "region_agnostic", "SuperAlphas combine Alphas of one region.")
-    selections, combos = _recipes(body)
+    selections = body.selection_expressions
+    combos = _combos(body)
     if not selections or not combos:
         raise refuse(
             422,
@@ -351,7 +345,7 @@ async def add_task(body: SuperTask, state: State) -> AddedTask:
         test_period=body.test_period,
         investability=selected_investability,
         activations=_activations(body.activation),
-        selection_recipes=selections,
+        selection_expressions=selections,
         combo_recipes=combos,
     )
     return await add_study(

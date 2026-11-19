@@ -12,7 +12,7 @@ import { useDebounced } from '@/lib/use-debounced'
 import { pool } from '@/screens/pool/api'
 import { checkFigure } from '@/screens/pool/shared'
 import { SimulationSettingsFields, testPeriodOf } from '@/screens/research-labs/simulation-settings'
-import type { VariableDef, VariableInfo } from '@/screens/research-labs/template/api'
+import type { OperatorScope, VariableDef, VariableInfo } from '@/screens/research-labs/template/api'
 import {
   INVESTABILITY_LABELS,
   type Investability,
@@ -404,6 +404,7 @@ function FocusedSimulation({ alphaId }: { alphaId: string }) {
                 value={selection}
                 onChange={setSelection}
                 scope={scope}
+                operatorScope="SELECTION"
               />
             </Field>
             <Field label="Combo expression">
@@ -412,6 +413,7 @@ function FocusedSimulation({ alphaId }: { alphaId: string }) {
                 value={combo}
                 onChange={setCombo}
                 scope={scope}
+                operatorScope="COMBO"
               />
             </Field>
           </>
@@ -422,6 +424,7 @@ function FocusedSimulation({ alphaId }: { alphaId: string }) {
               value={regular}
               onChange={setRegular}
               scope={scope}
+              operatorScope="REGULAR"
             />
           </Field>
         )}
@@ -670,16 +673,18 @@ function FocusedExpressionEditor({
   value,
   onChange,
   scope,
+  operatorScope,
 }: {
   label: string
   value: string
   onChange: (value: string) => void
   scope: Scope
+  operatorScope: OperatorScope
 }) {
   const [view, setView] = useState<'code' | 'blocks'>('code')
   const operators = useQuery({
-    queryKey: ['template-lab', 'options'],
-    queryFn: () => templateLab.options(),
+    queryKey: ['template-lab', 'options', operatorScope],
+    queryFn: () => templateLab.options(false, operatorScope),
     staleTime: 5 * 60_000,
   })
   const reference = operators.data?.reference ?? EMPTY_OPERATOR_DOCS

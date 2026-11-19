@@ -1954,6 +1954,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tools/decay-sweep/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decay Sweep Preview
+         * @description Read the Alpha and its settings without spending simulation quota.
+         */
+        post: operations["decay_sweep_preview_api_tools_decay_sweep_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tools/decay-sweep/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decay Sweep Task
+         * @description Queue one simulation per decay, holding the Alpha's other settings fixed.
+         */
+        post: operations["decay_sweep_task_api_tools_decay_sweep_tasks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tools/settings-sampler/preview": {
         parameters: {
             query?: never;
@@ -3116,6 +3156,78 @@ export interface components {
             /** Value Score */
             value_score: number | null;
         };
+        /** DecaySweepPlan */
+        DecaySweepPlan: {
+            /** Alphaid */
+            alphaId: string;
+            /** Expression */
+            expression: string;
+            /** Maxcores */
+            maxCores: number;
+            /** Maxdecay */
+            maxDecay: number;
+            settings: components["schemas"]["DecaySweepSettings"];
+        };
+        /** DecaySweepPreviewRequest */
+        DecaySweepPreviewRequest: {
+            /** Alphaid */
+            alphaId: string;
+        };
+        /** DecaySweepRequest */
+        DecaySweepRequest: {
+            /** Alphaid */
+            alphaId: string;
+            /**
+             * Cores
+             * @default 8
+             */
+            cores: number;
+            /**
+             * Decayfrom
+             * @default 1
+             */
+            decayFrom: number;
+            /**
+             * Decayto
+             * @default 40
+             */
+            decayTo: number;
+            /**
+             * Parity
+             * @default any
+             * @enum {string}
+             */
+            parity: "any" | "even" | "odd";
+        };
+        /** DecaySweepSettings */
+        DecaySweepSettings: {
+            /** Decay */
+            decay: number;
+            /** Delay */
+            delay: number;
+            /** Maxposition */
+            maxPosition: string | null;
+            /** Maxtrade */
+            maxTrade: string | null;
+            /** Nanhandling */
+            nanHandling: string;
+            /** Neutralization */
+            neutralization: string;
+            /** Pasteurization */
+            pasteurization: string;
+            /** Region */
+            region: string;
+            /** Simulationmode */
+            simulationMode: string | null;
+            /** Testperiod */
+            testPeriod: string | null;
+            /** Truncation */
+            truncation: number;
+            /** Unithandling */
+            unitHandling: string;
+            /** Universe */
+            universe: string;
+        };
         /** DropResult */
         DropResult: {
             /** Dropped */
@@ -3616,6 +3728,8 @@ export interface components {
             datasetIds: string[];
             /** Decay */
             decay: number | null;
+            /** Decays */
+            decays?: number[];
             /** Delay */
             delay: number | null;
             /** Expression */
@@ -5040,8 +5154,8 @@ export interface components {
             selectedNeutralizations: string[];
             /** Selecteduniverses */
             selectedUniverses: string[];
-            /** Selections */
-            selections: components["schemas"]["Recipe"][];
+            /** Selectionexpressions */
+            selectionExpressions: string[];
             /** Simulations */
             simulations: number;
             /** Testperiod */
@@ -5068,8 +5182,6 @@ export interface components {
             cores: number;
             /** Customcombos */
             customCombos?: components["schemas"]["Recipe"][];
-            /** Customselections */
-            customSelections?: components["schemas"]["Recipe"][];
             /**
              * Decay
              * @default 0
@@ -5100,6 +5212,8 @@ export interface components {
              * @default false
              */
             run: boolean;
+            /** Selectionexpressions */
+            selectionExpressions?: string[];
             /**
              * Selectionlimit
              * @default 30
@@ -8351,6 +8465,7 @@ export interface operations {
         parameters: {
             query?: {
                 refresh?: boolean;
+                scope?: "REGULAR" | "SELECTION" | "COMBO";
             };
             header?: never;
             path?: never;
@@ -8731,6 +8846,72 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddedTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decay_sweep_preview_api_tools_decay_sweep_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecaySweepPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecaySweepPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decay_sweep_task_api_tools_decay_sweep_tasks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecaySweepRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

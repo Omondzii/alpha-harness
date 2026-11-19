@@ -5,9 +5,6 @@ region and delay and keeping the top ``selectionLimit``, and a combo expression,
 the kept Alphas each day. Users select their expressions from submitted SuperAlphas or
 provide their own. Each pairing runs at the chosen decay and truncation, and BRAIN's own
 checks say which are submittable.
-
-Every selection caps each Alpha's operators at 8,000 / limit: BRAIN warns rather than
-fails past 8,000 operators in all, and drops what does not fit.
 """
 
 from dataclasses import dataclass
@@ -27,8 +24,6 @@ from .template import INVESTABILITY, Investability
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-#: BRAIN's own ceiling on operators across every selected Alpha.
-OPERATOR_LIMIT = 8000
 #: The least ``selectionLimit`` BRAIN accepts.
 MIN_SELECTION = 10
 #: Match Template Lab defaults; both are editable per task.
@@ -44,7 +39,7 @@ class Recipe:
 
 @dataclass(frozen=True, slots=True)
 class Candidate:
-    selection: Recipe
+    selection: str
     combo: Recipe
     universe: str
     neutralization: str
@@ -55,7 +50,7 @@ class Candidate:
     def name(self) -> str:
         label = self.investability.replace("_", " ").title()
         return (
-            f"{self.selection.name} · {self.combo.name} · {self.universe} · "
+            f"Selection {self.selection[:40]} · {self.combo.name} · {self.universe} · "
             f"{self.neutralization} · {label}"
         )
 
@@ -75,7 +70,7 @@ def candidates(
     test_period: str = TEST_PERIOD,
     investability: list[Investability] | None = None,
     activations: list[str],
-    selection_recipes: list[Recipe],
+    selection_expressions: list[str],
     combo_recipes: list[Recipe],
 ) -> list[Candidate]:
     """Every selection · combo · market · investability · activation, using chosen settings.
@@ -89,7 +84,7 @@ def candidates(
             max_trade, max_position = INVESTABILITY[invest]
             for universe in universes:
                 for neutralization in neutralizations:
-                    for selection in selection_recipes:
+                    for selection in selection_expressions:
                         for combo in combo_recipes:
                             settings = SimulationSettings(
                                 region=region,
@@ -112,7 +107,7 @@ def candidates(
                             request = SimulationRequest(
                                 type=SimulationType.SUPER,
                                 settings=settings,
-                                selection=selection.code,
+                                selection=selection,
                                 combo=combo.code,
                             )
                             out.append(
@@ -124,9 +119,7 @@ def candidates(
 
 
 def seed_trials(found: list[Candidate]) -> Callable[[int], list[Trial]]:
-    """Parked trials for every candidate. Both expressions ride in ``params``, which
-    ``send_parked`` reads; the trial's own expression names the recipe, the line a results
-    table shows."""
+    """Parked trials keep both expressions in params for ``send_parked`` to read."""
 
     def build(study_id: int) -> list[Trial]:
         return [
@@ -134,7 +127,6 @@ def seed_trials(found: list[Candidate]) -> Callable[[int], list[Trial]]:
                 study_id=study_id,
                 number=number,
                 params={
-                    "recipe": candidate.name,
                     "selection": candidate.request.selection,
                     "combo": candidate.request.combo,
                 },
@@ -163,6 +155,7 @@ if __name__ == "__main__":
     limit = 40
     chosen_decay = 9
     chosen_truncation = 0.23
+    chosen_selections = ["(operator_count <= 200)", "(dataset_count <= 2)"]
     found = candidates(
         region="USA",
         delay=1,
@@ -172,7 +165,7 @@ if __name__ == "__main__":
         decay=chosen_decay,
         truncation=chosen_truncation,
         activations=["IS", "OS"],
-        selection_recipes=[Recipe("Sample selection", "(operator_count <= 200)")],
+        selection_expressions=chosen_selections,
         combo_recipes=[Recipe("Sample combo", "1")],
     )
     trials = seed_trials(found)(1)
@@ -184,11 +177,15 @@ if __name__ == "__main__":
         neutralizations=["SUBINDUSTRY", "STATISTICAL"],
         selection_limit=limit,
         activations=["IS"],
-        selection_recipes=[Recipe("Sample selection", "(operator_count <= 200)")],
+        selection_expressions=[chosen_selections[0]],
         combo_recipes=[Recipe("Sample combo", "1")],
     )
     checks = {
-        "every pairing at one decay and every activation": len(found) == 2,
+        "every selection runs under each activation": len(found) == 4,
+        "the exact chosen selections reach simulation requests": {
+            w["selection"] for w in wires
+        }
+        == set(chosen_selections),
         "every selected universe/neutralization pair is simulated": {
             (c.request.settings.universe, c.request.settings.neutralization) for c in market_sweep
         }
@@ -212,11 +209,10 @@ if __name__ == "__main__":
             for w in wires
         ),
         "no two alike": len({request_hash(c.request) for c in found}) == len(found),
-        "operators capped at 8,000 / limit": all(
-            c.request.selection is not None
-            and f"(operator_count <= {OPERATOR_LIMIT // limit})" in c.request.selection
-            for c in found
-        ),
+        "chosen selections reach simulations unchanged": {
+            c.request.selection for c in found
+        }
+        == set(chosen_selections),
         "SUPER, Full, Positive, as asked": all(
             w["type"] == "SUPER"
             and w["settings"]["simulationMode"] == FULL_MODE

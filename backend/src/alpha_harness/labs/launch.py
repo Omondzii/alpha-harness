@@ -22,6 +22,7 @@ from ..schemas import Out
 from . import scheduler, search
 from .params import (
     CORRELATION_BREAKER,
+    DECAY_SWEEP,
     GA_SAMPLER,
     POWER_POOL_SAMPLER,
     SEARCH_SAMPLER,
@@ -53,6 +54,7 @@ _TASKS: dict[str, tuple[str, str]] = {
     POWER_POOL_SAMPLER: ("power-pool", "sharpe"),
     SETTINGS_SAMPLER: ("settings-sampler", "sharpe"),
     CORRELATION_BREAKER: ("correlation-breaker", "sharpe"),
+    DECAY_SWEEP: ("decay-sweep", "sharpe"),
     SUPER_LAB: ("super-alpha", "sharpe"),
 }
 

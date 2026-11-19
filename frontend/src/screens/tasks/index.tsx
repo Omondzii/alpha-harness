@@ -64,8 +64,21 @@ import { type Column, DataTable } from '@/ui/table'
 
 /** Matches `labs.params.SETTINGS_SAMPLER`. */
 const SETTINGS_SAMPLER = 'settings-sampler'
+/** Matches `labs.params.DECAY_SWEEP`. */
+const DECAY_SWEEP = 'decay-sweep'
 /** Matches `labs.params.TEMPLATE_SAMPLER`. */
 const TEMPLATE_SAMPLER = 'template'
+
+const decaySummary = (decays: number[] | undefined) => {
+  const values = decays ?? []
+  if (!values.length) return DASH
+  const parity = values.every((value) => value % 2 === 0)
+    ? ' even'
+    : values.every((value) => value % 2 === 1)
+      ? ' odd'
+      : ''
+  return `${values[0]}–${values[values.length - 1]}${parity} · ${fmt.int(values.length)} values`
+}
 
 export const useLastTaskId = create<{
   taskId: number | null
@@ -239,25 +252,65 @@ const SAMPLER_COLUMNS: Column<RankedAlpha>[] = [
   AFTER_COST_SHARPE,
 ]
 
+/** A Decay Sweep only varies this setting, so put it beside each run's figures. */
+const DECAY_SWEEP_COLUMNS: Column<RankedAlpha>[] = [
+  ALPHA_ID,
+  setting('decay', 'Decay', '80px'),
+  {
+    key: 'sharpe',
+    header: 'Sharpe',
+    width: '100px',
+    align: 'right',
+    cell: (r) => <SharpeCell value={r.sharpe} />,
+  },
+  {
+    key: 'testSharpe',
+    header: 'Test Sharpe',
+    width: '100px',
+    align: 'right',
+    cell: (r) => (
+      <span className={TEXT_TONE[signTone(r.testSharpe)]}>{fmt.ratio(r.testSharpe)}</span>
+    ),
+  },
+  {
+    key: 'fitness',
+    header: 'Fitness',
+    width: '80px',
+    align: 'right',
+    cell: (r) => fmt.ratio(r.fitness),
+  },
+  {
+    key: 'turnover',
+    header: 'Turnover',
+    width: '88px',
+    align: 'right',
+    cell: (r) => fmt.pct(r.turnover),
+  },
+]
+
 /** What a task searches for leads the table when it is not already shown by another column. */
 const topColumns = (task: LabTask): Column<RankedAlpha>[] =>
   task.lab === SETTINGS_SAMPLER
     ? task.truncationAgent
       ? [...SAMPLER_COLUMNS.slice(0, 5), TRUNCATION, ...SAMPLER_COLUMNS.slice(5)]
       : SAMPLER_COLUMNS
-    : task.objectiveLabel === 'Sharpe' || task.objectiveLabel === 'Train Fitness'
-      ? TOP_COLUMNS
-      : [
-          ...TOP_COLUMNS.slice(0, 2),
-          {
-            key: 'value',
-            header: task.objectiveLabel,
-            width: '112px',
-            align: 'right',
-            cell: (r) => <span className={TEXT_TONE[signTone(r.value)]}>{fmt.ratio(r.value)}</span>,
-          },
-          ...TOP_COLUMNS.slice(2),
-        ]
+    : task.lab === DECAY_SWEEP
+      ? DECAY_SWEEP_COLUMNS
+      : task.objectiveLabel === 'Sharpe' || task.objectiveLabel === 'Train Fitness'
+        ? TOP_COLUMNS
+        : [
+            ...TOP_COLUMNS.slice(0, 2),
+            {
+              key: 'value',
+              header: task.objectiveLabel,
+              width: '112px',
+              align: 'right',
+              cell: (r) => (
+                <span className={TEXT_TONE[signTone(r.value)]}>{fmt.ratio(r.value)}</span>
+              ),
+            },
+            ...TOP_COLUMNS.slice(2),
+          ]
 
 type Act = { action: 'runAll' } | { action: 'run' | 'pause' | 'stop' | 'remove'; task: LabTask }
 
@@ -396,6 +449,14 @@ export function TasksScreen() {
                   <>
                     {' · '}
                     <span className="num">{`${t.region} D${t.delay}`}</span>
+                    {t.lab === DECAY_SWEEP && (
+                      <>
+                        {' · '}
+                        <span className="num">{t.alphaId}</span>
+                        {' · '}
+                        <span className="num">{decaySummary(t.decays)}</span>
+                      </>
+                    )}
                     {/* Neither seeds nor datasets: say nothing rather than report "0 datasets"
                         about something the task never had. */}
                     {(t.seeds > 0 || t.datasetIds.length > 0) && (
@@ -845,7 +906,9 @@ function TaskDetail({
     task.name,
     task.labName,
     task.templateName,
-    task.lab === SETTINGS_SAMPLER ? task.alphaId : `${task.region} D${task.delay}`,
+    task.lab === SETTINGS_SAMPLER || task.lab === DECAY_SWEEP
+      ? task.alphaId
+      : `${task.region} D${task.delay}`,
   ]
     .filter(Boolean)
     .join(' · ')
@@ -853,11 +916,13 @@ function TaskDetail({
     task.lab === SETTINGS_SAMPLER
       ? // Held at the source Alpha's values for every simulation in the sweep.
         `${fmt.int(task.markets)} Markets · Decay ${task.decay ?? DASH} · ${task.truncationAgent ? 'Truncation Agent' : `Truncation ${task.truncation ?? DASH}`} · NaN Handling ${task.nanHandling ?? DASH}`
-      : task.lab === 'super-alpha'
-        ? `${task.universes?.join(', ') || task.universe || DASH} · ${task.neutralizations?.join(', ') || DASH} · Decay ${task.decay ?? DASH} · Truncation ${task.truncation ?? DASH} · SuperAlphas from your submitted Alphas`
-        : task.seeds > 0
-          ? `${task.universe ?? DASH} · ${fmt.int(task.seeds)} seeds · Population ${fmt.int(task.population)} · Mutation ${fmt.pct(task.mutationRate, 0)}`
-          : `Decay ${task.decay ?? DASH} · ${fmt.int(task.fields)} fields`
+      : task.lab === DECAY_SWEEP
+        ? `${task.region ?? DASH} D${task.delay ?? DASH} · Decays ${decaySummary(task.decays)} · all other settings held fixed`
+        : task.lab === 'super-alpha'
+          ? `${task.universes?.join(', ') || task.universe || DASH} · ${task.neutralizations?.join(', ') || DASH} · Decay ${task.decay ?? DASH} · Truncation ${task.truncation ?? DASH} · SuperAlphas from your submitted Alphas`
+          : task.seeds > 0
+            ? `${task.universe ?? DASH} · ${fmt.int(task.seeds)} seeds · Population ${fmt.int(task.population)} · Mutation ${fmt.pct(task.mutationRate, 0)}`
+            : `Decay ${task.decay ?? DASH} · ${fmt.int(task.fields)} fields`
   const copyResults = () =>
     navigator.clipboard.writeText(resultsMarkdown(task, found)).then(
       () => toast.success(`Copied ${fmt.int(found.length)} results`),
@@ -965,7 +1030,9 @@ function TaskDetail({
           </Button>
         </div>
         <DataTable
-          label={task.lab === SETTINGS_SAMPLER ? 'Results' : 'Top Alphas'}
+          label={
+            task.lab === SETTINGS_SAMPLER || task.lab === DECAY_SWEEP ? 'Results' : 'Top Alphas'
+          }
           rows={found}
           columns={topColumns(task)}
           rowKey={(r) => String(r.trialId)}
@@ -979,7 +1046,7 @@ function TaskDetail({
               : 'No Alphas back yet.'
           }
         />
-        {task.lab === SETTINGS_SAMPLER && (
+        {(task.lab === SETTINGS_SAMPLER || task.lab === DECAY_SWEEP) && (
           // A two-column grid rather than padded text: the equals signs line up whatever the
           // labels are and whatever the font does.
           <p className="num grid w-fit grid-cols-[auto_auto] gap-x-2 gap-y-0.5 text-body-compact text-ink-subtle">

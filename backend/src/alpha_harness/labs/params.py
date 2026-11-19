@@ -27,6 +27,8 @@ POWER_POOL_SAMPLER = "power-pool"
 SETTINGS_SAMPLER = "settings-sampler"
 #: Studies that re-shape one Alpha's expression at its own settings (tools.correlation_breaker).
 CORRELATION_BREAKER = "correlation-breaker"
+#: Studies that re-run one Alpha at its own settings while varying decay (tools.decay_sweep).
+DECAY_SWEEP = "decay-sweep"
 #: Studies that combine your submitted Alphas into SuperAlphas (labs.super_alpha).
 SUPER_LAB = "super-alpha"
 #: Studies that are research-lab tasks, run only from the Tasks tab, by their lab's name.
@@ -37,6 +39,7 @@ TASK_SAMPLERS = {
     POWER_POOL_SAMPLER: "LLM Power Pool Lab",
     SETTINGS_SAMPLER: "Settings Sampler",
     CORRELATION_BREAKER: "Correlation Breaker",
+    DECAY_SWEEP: "Decay Sweep",
     SUPER_LAB: "Super Alpha Lab",
 }
 
@@ -137,6 +140,14 @@ class BreakerParams(TaskParams):
     recipes: list[str] = Field(default_factory=list)
 
 
+class DecaySweepParams(TaskParams):
+    """Decay Sweep: one expression at one market, varying only decay."""
+
+    alpha_id: str = ""
+    decay: int = 0
+    decays: list[int] = Field(default_factory=list)
+
+
 class SuperParams(TaskParams):
     """Super Alpha Lab: every selection and combo pairing is written up front."""
 
@@ -166,6 +177,7 @@ BY_SAMPLER: dict[str, type[TaskParams]] = {
     POWER_POOL_SAMPLER: PowerPoolParams,
     SETTINGS_SAMPLER: SettingsParams,
     CORRELATION_BREAKER: BreakerParams,
+    DECAY_SWEEP: DecaySweepParams,
     SUPER_LAB: SuperParams,
 }
 

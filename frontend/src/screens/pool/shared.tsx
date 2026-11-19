@@ -141,6 +141,10 @@ export function AlphaActionsMenu({ alphaId }: { alphaId: string }) {
             void navigate({ to: '/tools/settings-sampler', search: { alpha: alphaId } }),
         },
         {
+          label: 'Decay Sweep',
+          onClick: () => void navigate({ to: '/tools/decay-sweep', search: { alpha: alphaId } }),
+        },
+        {
           label: 'Focused Simulation',
           onClick: () =>
             void navigate({

@@ -13,15 +13,23 @@ import json
 from typing import Any, Literal, Self
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 from sqlalchemy import delete, select
 
-from ..brain.schemas import REGION_AGNOSTIC_REGION
+from ..brain.schemas import REGION_AGNOSTIC_REGION, SimulationRequest, SimulationSettings
 from ..db.models import Submission, Trial, TrialState, utcnow
 from ..engine.packer import MAX_BATCH
 from ..engine.slots import DEFAULT_SLOTS
+from ..labs import search
 from ..labs.launch import NO_NEUTRALIZATION, AddedTask, add_study
-from ..labs.params import CORRELATION_BREAKER, SETTINGS_SAMPLER, BreakerParams, SettingsParams
+from ..labs.params import (
+    CORRELATION_BREAKER,
+    DECAY_SWEEP,
+    SETTINGS_SAMPLER,
+    BreakerParams,
+    DecaySweepParams,
+    SettingsParams,
+)
 from ..schemas import Out
 from ..tools import correlation_breaker, settings_sampler, submission_planner
 from ..vault.yields import checks_of, verdict
@@ -172,6 +180,159 @@ class SampleRequest(PreviewRequest):
     market_neutral_only: bool = Field(default=True, alias="marketNeutralOnly")
     #: Truncation set per market by the Truncation Agent rather than held at one value.
     truncation_agent: bool = Field(default=False, alias="truncationAgent")
+
+
+class DecaySweepSettings(Out):
+    region: str
+    delay: int
+    universe: str
+    neutralization: str
+    decay: int
+    truncation: float
+    pasteurization: str
+    unit_handling: str
+    nan_handling: str
+    test_period: str | None
+    max_trade: str | None
+    max_position: str | None
+    simulation_mode: str | None
+
+
+class DecaySweepPlan(Out):
+    alpha_id: str
+    expression: str
+    settings: DecaySweepSettings
+    max_decay: int
+    max_cores: int
+
+
+class DecaySweepPreviewRequest(BaseModel):
+    alpha_id: str = Field(min_length=1, max_length=64, alias="alphaId")
+
+    model_config = {"populate_by_name": True}
+
+
+class DecaySweepRequest(DecaySweepPreviewRequest):
+    decay_from: int = Field(default=1, ge=0, le=search.MAX_DECAY, alias="decayFrom")
+    decay_to: int = Field(default=40, ge=0, le=search.MAX_DECAY, alias="decayTo")
+    parity: Literal["any", "even", "odd"] = "any"
+    cores: int = Field(default=DEFAULT_SLOTS, ge=1)
+
+    @model_validator(mode="after")
+    def _valid_range(self) -> Self:
+        if self.decay_from > self.decay_to:
+            raise ValueError("The decay range must start at or below its end.")
+        if len(decays_between(self.decay_from, self.decay_to, self.parity)) < 2:
+            raise ValueError("Choose a range and parity that contain at least two decay values.")
+        return self
+
+
+def decays_between(start: int, end: int, parity: Literal["any", "even", "odd"]) -> list[int]:
+    """Inclusive integer decay range filtered by parity."""
+    return [
+        value
+        for value in range(start, end + 1)
+        if parity == "any" or (value % 2 == (0 if parity == "even" else 1))
+    ]
+
+
+async def _decay_sweep_source(state: Any, alpha_id: str) -> tuple[str, SimulationSettings]:
+    """Read an Alpha's expression and settings for previewing or queueing."""
+    if not alpha_id.strip():
+        raise refuse(422, "decay_sweep_blocked", "Give an Alpha ID.")
+    body = await state.endpoints.alpha_body(alpha_id)
+    code = body.get("regular") or body.get("combo") or body.get("selection") or {}
+    expression = code.get("code") if isinstance(code, dict) else None
+    if not isinstance(expression, str) or not expression.strip():
+        raise refuse(422, "decay_sweep_blocked", "This Alpha has no expression to re-run.")
+    raw_settings = body.get("settings")
+    if not isinstance(raw_settings, dict):
+        raise refuse(422, "decay_sweep_blocked", "BRAIN returned no simulation settings.")
+    try:
+        source = SimulationSettings.model_validate(raw_settings)
+    except ValidationError as exc:
+        raise refuse(
+            422, "decay_sweep_blocked", "BRAIN returned incomplete simulation settings."
+        ) from exc
+    return expression, source
+
+
+def _decay_sweep_plan(
+    alpha_id: str, expression: str, source: SimulationSettings
+) -> dict[str, Any]:
+    """Define the available decay choices and expose every setting held fixed."""
+    settings = DecaySweepSettings(
+        region=source.region,
+        delay=source.delay,
+        universe=source.universe,
+        neutralization=source.neutralization,
+        decay=source.decay,
+        truncation=source.truncation,
+        pasteurization=source.pasteurization,
+        unit_handling=source.unit_handling,
+        nan_handling=source.nan_handling,
+        test_period=source.test_period,
+        max_trade=source.max_trade,
+        max_position=source.max_position,
+        simulation_mode=source.simulation_mode,
+    )
+    return {
+        "alphaId": alpha_id,
+        "expression": expression,
+        "settings": settings,
+        "maxDecay": search.MAX_DECAY,
+    }
+
+
+@router.post("/decay-sweep/preview")
+async def decay_sweep_preview(body: DecaySweepPreviewRequest, state: State) -> DecaySweepPlan:
+    """Read the Alpha and its settings without spending simulation quota."""
+    expression, source = await _decay_sweep_source(state, body.alpha_id.strip())
+    return DecaySweepPlan.model_validate(
+        {
+            **_decay_sweep_plan(body.alpha_id.strip(), expression, source),
+            "maxCores": state.engine.slots,
+        }
+    )
+
+
+@router.post("/decay-sweep/tasks", status_code=201)
+async def decay_sweep_task(body: DecaySweepRequest, state: State) -> AddedTask:
+    """Queue one simulation per decay, holding the Alpha's other settings fixed."""
+    if body.cores > state.engine.slots:
+        raise refuse(
+            422,
+            "too_many_cores",
+            f"The engine has {state.engine.slots} slots, so a task cannot hold {body.cores}.",
+        )
+    expression, source_settings = await _decay_sweep_source(state, body.alpha_id.strip())
+    decays = decays_between(body.decay_from, body.decay_to, body.parity)
+
+    requests = [
+        SimulationRequest(
+            settings=source_settings.model_copy(update={"decay": decay}),
+            regular=expression,
+        )
+        for decay in decays
+    ]
+    return await add_study(
+        state,
+        now=utcnow(),
+        sampler=DECAY_SWEEP,
+        params=DecaySweepParams(
+            region=source_settings.region,
+            delay=source_settings.delay,
+            alpha_id=body.alpha_id.strip(),
+            decay=source_settings.decay,
+            decays=decays,
+            cores=body.cores,
+        ),
+        simulations=len(requests),
+        batch_size=(body.cores + 1) * MAX_BATCH,
+        template_source=expression,
+        template_name=f"Decay Sweep · {body.alpha_id.strip()}",
+        seeds=settings_sampler.seed_trials(requests),
+    )
 
 
 @router.post("/settings-sampler/preview")

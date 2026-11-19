@@ -127,6 +127,14 @@ const correlationBreaker = createRoute({
     'CorrelationBreakerScreen',
   ),
 })
+const decaySweep = createRoute({
+  getParentRoute: () => tools,
+  path: 'decay-sweep',
+  validateSearch: (search: Record<string, unknown>) => ({
+    alpha: typeof search['alpha'] === 'string' ? search['alpha'] : undefined,
+  }),
+  component: lazyRouteComponent(() => import('@/screens/tools/decay-sweep'), 'DecaySweepScreen'),
+})
 const focusedSimulationToolPicker = createRoute({
   getParentRoute: () => tools,
   path: 'focused-simulation',
@@ -258,6 +266,7 @@ const routeTree = root.addChildren([
     settingsSampler,
     submissionPlanner,
     correlationBreaker,
+    decaySweep,
     focusedSimulationToolPicker,
     focusedSimulationTool,
   ]),

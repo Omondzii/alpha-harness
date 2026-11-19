@@ -10,6 +10,7 @@ const ABOUT: Record<(typeof TOOL_TABS)[number]['tab'], string> = {
   'settings-sampler': 'Sweep one Alpha across Simulation Settings to find where it works best.',
   'submission-planner': 'Pick which Alphas to submit, and in what order.',
   'correlation-breaker': 'Re-shape an Alpha that is already in the Production Pool.',
+  'decay-sweep': 'Sweep decay while holding an Alpha’s expression and settings fixed.',
   'focused-simulation': 'Edit one Alpha’s expression and settings, then run a focused simulation.',
 }
 
@@ -19,6 +20,7 @@ const SEARCH = {
   'settings-sampler': { alpha: undefined },
   'submission-planner': { task: undefined },
   'correlation-breaker': { alpha: undefined },
+  'decay-sweep': { alpha: undefined },
   'focused-simulation': { alpha: undefined },
 } as const
 

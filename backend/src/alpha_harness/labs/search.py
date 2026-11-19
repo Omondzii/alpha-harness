@@ -38,6 +38,7 @@ LOOKBACKS = (5, 21, 63, 126, 252)
 #: Grouping fields for group operators; they do not count as data fields.
 GROUPS = ("market", "sector", "industry", "subindustry")
 DECAYS = (0, 3, 5, 7, 10)
+MAX_DECAY = 512
 TRUNCATION = 0.08
 NEUTRALIZATIONS = ("MARKET", "SECTOR", "INDUSTRY", "SUBINDUSTRY")
 #: Most concurrent slots one lab task may hold: all of the engine's, so a single sweep

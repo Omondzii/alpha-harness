@@ -10,6 +10,7 @@ import contextlib
 import itertools
 import json
 import math
+import re
 from typing import Annotated, Any, Literal
 
 import structlog
@@ -299,6 +300,7 @@ async def _datasets_used(state: Any, expression: str | None, candidates: list[st
     """The datasets an expression actually reads, among the task's chosen datasets."""
     if not expression or not candidates:
         return []
+    fields = set(re.findall(r"[A-Za-z0-9_]+", expression))
     placeholders = ", ".join("?" for _ in candidates)
     rows = await state.catalog.query(
         f"SELECT DISTINCT field_id, dataset_id FROM data_field "  # noqa: S608
@@ -309,7 +311,7 @@ async def _datasets_used(state: Any, expression: str | None, candidates: list[st
         str(row["dataset_id"])
         for row in rows
         if row.get("dataset_id") is not None
-        and str(row["field_id"]) in expression
+        and str(row["field_id"]) in fields
     }
     return sorted(found)
 
@@ -805,21 +807,12 @@ async def top(
         )
     stored = await state.alphas.by_ids([t.alpha_id for t in best if t.alpha_id])
     colors = await state.alphas.colors_by_ids([t.alpha_id for t in best if t.alpha_id])
-    task = await _one(state, task_id)
-    candidates = list((task.sampler_params or {}).get("datasetIds") or [])
     current = {a: checks_of(r.get("checks")) for a, r in stored.items() if r.get("checks")}
     prod = await _prod_correlations(state, list(stored), current)
     # No download is started from here. Reading a page is not asking for one, and these are
     # three BRAIN requests per Alpha: enough of them earns a 429, which pauses *every* caller
     # of the shared client -- the simulation engine's dispatch and polling included. Calculate
     # After-Cost Sharpe is the way to ask, and it says how many it will fetch before it does.
-    ranked_rows = ranked(best, current)
-    used: dict[str, list[str]] = {}
-    for r in ranked_rows:
-        expression = r.get("expression")
-        key = str(expression or "")
-        if key not in used:
-            used[key] = await _datasets_used(state, expression, candidates)
     return [
         RankedAlpha.model_validate(
             r
@@ -827,7 +820,6 @@ async def top(
                 "longCount": (stored.get(r["alphaId"]) or {}).get("long_count"),
                 "shortCount": (stored.get(r["alphaId"]) or {}).get("short_count"),
                 "color": colors.get(r["alphaId"]),
-                "datasetIds": used.get(str(r.get("expression") or ""), []),
                 "afterCostSharpe": (stored.get(r["alphaId"]) or {}).get("after_cost_t10"),
                 "testSharpe": (stored.get(r["alphaId"]) or {}).get("test_sharpe"),
                 "testFitness": (stored.get(r["alphaId"]) or {}).get("test_fitness"),
@@ -835,7 +827,41 @@ async def top(
                 "submitted": is_submitted(stored.get(r["alphaId"])),
             }
         )
-        for r in ranked_rows
+        for r in ranked(best, current)
+    ]
+
+
+@router.get("/{task_id}/dataset-trials")
+async def dataset_trials(
+    task_id: int,
+    state: State,
+    dataset_id: Annotated[str, Query(min_length=1)],
+) -> list[int]:
+    """Trial IDs in this task whose expressions use a field in the selected dataset."""
+    task = await _one(state, task_id)
+    if dataset_id not in (task.sampler_params or {}).get("datasetIds", []):
+        raise refuse(400, "dataset_not_selected", "That dataset was not selected for this task.")
+    field_rows = await state.catalog.query(
+        "SELECT DISTINCT field_id FROM data_field WHERE dataset_id = ?", [dataset_id]
+    )
+    field_ids = {str(row["field_id"]) for row in field_rows}
+    if not field_ids:
+        return []
+
+    async with state.db.session() as session:
+        trials = (
+            await session.execute(
+                select(Trial.id, Trial.expression).where(
+                    Trial.study_id == task_id,
+                    Trial.state == TrialState.COMPLETE,
+                    or_(Trial.generation.is_(None), Trial.generation != 0),
+                )
+            )
+        ).tuples()
+    return [
+        trial_id
+        for trial_id, expression in trials
+        if expression and field_ids.intersection(re.findall(r"[A-Za-z0-9_]+", expression))
     ]
 
 
@@ -1002,6 +1028,7 @@ async def submittable_alphas(state: State) -> list[TaskAlpha]:
     current = {a: checks_of(r.get("checks")) for a, r in stored.items() if r.get("checks")}
     prod = await _prod_correlations(state, list(stored), current)
     by_trial = {t.id: t.study_id for t in trials}
+    dataset_cache: dict[tuple[str, tuple[str, ...]], list[str]] = {}
     out: list[TaskAlpha] = []
     seen: set[str] = set()
     for r in ranked(trials, current):
@@ -1011,6 +1038,13 @@ async def submittable_alphas(state: State) -> list[TaskAlpha]:
         seen.add(alpha_id)
         task = tasks[by_trial[r["trialId"]]]
         vault = stored.get(alpha_id) or {}
+        expression = r.get("expression")
+        candidates = tuple(sorted(set((task.sampler_params or {}).get("datasetIds") or [])))
+        dataset_key = (str(expression or ""), candidates)
+        if dataset_key not in dataset_cache:
+            dataset_cache[dataset_key] = await _datasets_used(
+                state, expression, list(candidates)
+            )
         out.append(
             TaskAlpha.model_validate(
                 r
@@ -1022,11 +1056,7 @@ async def submittable_alphas(state: State) -> list[TaskAlpha]:
                     "testFitness": vault.get("test_fitness"),
                     "prodCorrelation": prod.get(alpha_id),
                     "submitted": is_submitted(vault),
-                    "datasetIds": await _datasets_used(
-                        state,
-                        r.get("expression"),
-                        list((task.sampler_params or {}).get("datasetIds") or []),
-                    ),
+                    "datasetIds": dataset_cache[dataset_key],
                     "taskId": task.id,
                     "taskName": task.label
                     or task.template_name

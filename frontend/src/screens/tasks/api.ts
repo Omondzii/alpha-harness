@@ -38,6 +38,8 @@ export const labTasks = {
     http.patch<LabTask>(`${B}/${id}`, body),
   remove: (id: number) => http.del<Schemas['TaskRemoved']>(`${B}/${id}`),
   top: (id: number, limit = 50) => http.get<RankedAlpha[]>(`${B}/${id}/top${qs({ limit })}`),
+  datasetTrials: (id: number, datasetId: string) =>
+    http.get<number[]>(`${B}/${id}/dataset-trials${qs({ dataset_id: datasetId })}`),
   /** Every Alpha from every task that nothing refuses: each check PASS, WARNING or PENDING. */
   submittable: () => http.get<TaskAlpha[]>(`${B}/submittable`),
   /** Measured locally against the submitted Power Pool, from the PnL already stored. */

@@ -406,6 +406,8 @@ export function TaskResultsScreen() {
         activeAlphaId={alphaId}
         regionFilter={regionFilter}
         datasetNames={datasetNames}
+        datasetIds={task?.datasetIds ?? []}
+        datasetTaskId={id}
       />
 
       <CheckSets rows={rows} />

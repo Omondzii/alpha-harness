@@ -167,6 +167,7 @@ class RankedAlpha(Out):
     alpha_id: str | None
     color: str | None = None
     expression: str | None
+    dataset_ids: list[str] = Field(default_factory=list)
     settings: dict[str, Any] | None
     value: float
     sharpe: float | None
@@ -292,6 +293,25 @@ async def _one(state: Any, task_id: int) -> Study:
     if row is None or row.sampler not in TASK_SAMPLERS:
         raise StudyNotFoundError(task_id)
     return row
+
+
+async def _datasets_used(state: Any, expression: str | None, candidates: list[str]) -> list[str]:
+    """The datasets an expression actually reads, among the task's chosen datasets."""
+    if not expression or not candidates:
+        return []
+    placeholders = ", ".join("?" for _ in candidates)
+    rows = await state.catalog.query(
+        f"SELECT DISTINCT field_id, dataset_id FROM data_field "  # noqa: S608
+        f"WHERE dataset_id IN ({placeholders})",
+        candidates,
+    )
+    found = {
+        str(row["dataset_id"])
+        for row in rows
+        if row.get("dataset_id") is not None
+        and str(row["field_id"]) in expression
+    }
+    return sorted(found)
 
 
 async def _progress(state: Any, ids: list[int]) -> dict[int, dict[str, Any]]:
@@ -785,12 +805,21 @@ async def top(
         )
     stored = await state.alphas.by_ids([t.alpha_id for t in best if t.alpha_id])
     colors = await state.alphas.colors_by_ids([t.alpha_id for t in best if t.alpha_id])
+    task = await _one(state, task_id)
+    candidates = list((task.sampler_params or {}).get("datasetIds") or [])
     current = {a: checks_of(r.get("checks")) for a, r in stored.items() if r.get("checks")}
     prod = await _prod_correlations(state, list(stored), current)
     # No download is started from here. Reading a page is not asking for one, and these are
     # three BRAIN requests per Alpha: enough of them earns a 429, which pauses *every* caller
     # of the shared client -- the simulation engine's dispatch and polling included. Calculate
     # After-Cost Sharpe is the way to ask, and it says how many it will fetch before it does.
+    ranked_rows = ranked(best, current)
+    used: dict[str, list[str]] = {}
+    for r in ranked_rows:
+        expression = r.get("expression")
+        key = str(expression or "")
+        if key not in used:
+            used[key] = await _datasets_used(state, expression, candidates)
     return [
         RankedAlpha.model_validate(
             r
@@ -798,6 +827,7 @@ async def top(
                 "longCount": (stored.get(r["alphaId"]) or {}).get("long_count"),
                 "shortCount": (stored.get(r["alphaId"]) or {}).get("short_count"),
                 "color": colors.get(r["alphaId"]),
+                "datasetIds": used.get(str(r.get("expression") or ""), []),
                 "afterCostSharpe": (stored.get(r["alphaId"]) or {}).get("after_cost_t10"),
                 "testSharpe": (stored.get(r["alphaId"]) or {}).get("test_sharpe"),
                 "testFitness": (stored.get(r["alphaId"]) or {}).get("test_fitness"),
@@ -805,7 +835,7 @@ async def top(
                 "submitted": is_submitted(stored.get(r["alphaId"])),
             }
         )
-        for r in ranked(best, current)
+        for r in ranked_rows
     ]
 
 
@@ -992,6 +1022,11 @@ async def submittable_alphas(state: State) -> list[TaskAlpha]:
                     "testFitness": vault.get("test_fitness"),
                     "prodCorrelation": prod.get(alpha_id),
                     "submitted": is_submitted(vault),
+                    "datasetIds": await _datasets_used(
+                        state,
+                        r.get("expression"),
+                        list((task.sampler_params or {}).get("datasetIds") or []),
+                    ),
                     "taskId": task.id,
                     "taskName": task.label
                     or task.template_name

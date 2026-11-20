@@ -23,6 +23,7 @@ import { labTasks, type RankedAlpha } from '@/screens/tasks/api'
 import { setting } from '@/screens/tasks/columns'
 import { type PowerPoolRow, powerPoolTone, usePowerPool } from '@/screens/tasks/power-pool'
 import { Button, ErrorNotice, LINK, Notice, Panel, Progress } from '@/ui/kit'
+import { Select } from '@/ui/overlay'
 import { type Column, DataTable, type Sort } from '@/ui/table'
 
 const WORKFLOW = 'power-pool-workflow'
@@ -145,6 +146,7 @@ export function AlphaPane({
   onOpenAlpha,
   activeAlphaId,
   regionFilter,
+  datasetNames,
 }: {
   title: string
   rows: RankedAlpha[]
@@ -165,9 +167,12 @@ export function AlphaPane({
   activeAlphaId?: string | null
   /** Filter rows by region. If null, show all regions. */
   regionFilter?: string | null
+  /** Friendly names for dataset IDs used by the rows. */
+  datasetNames?: Record<string, string>
 }) {
   const [showAll, setShowAll] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [datasetFilter, setDatasetFilter] = useState<string | null>(null)
   const [viewedIds, setViewedIds] = useState(readViewedAlphaIds)
   const saveViewedIds = (next: Set<string>) => {
     setViewedIds(next)
@@ -195,10 +200,18 @@ export function AlphaPane({
     () => clean.filter((r) => passesPool(pool.by.get(r.alphaId))),
     [clean, pool.by],
   )
+  const datasetOptions = useMemo(() => {
+    const ids = new Set(rows.flatMap((r) => r.datasetIds ?? []))
+    return [...ids]
+      .sort((a, b) => (datasetNames?.[a] ?? a).localeCompare(datasetNames?.[b] ?? b))
+      .map((id) => ({ value: id, label: datasetNames?.[id] ?? id }))
+  }, [rows, datasetNames])
   const filtered = useMemo(() => {
-    if (!regionFilter) return rows
-    return rows.filter((r) => setting(r, 'region') === regionFilter)
-  }, [rows, regionFilter])
+    let next = rows
+    if (regionFilter) next = next.filter((r) => setting(r, 'region') === regionFilter)
+    if (datasetFilter) next = next.filter((r) => r.datasetIds?.includes(datasetFilter))
+    return next
+  }, [rows, regionFilter, datasetFilter])
   const filteredUnsubmitted = useMemo(() => filtered.filter(isUnsubmitted), [filtered])
   const filteredClean = useMemo(() => filteredUnsubmitted.filter(isClean), [filteredUnsubmitted])
   const filteredCleanIds = useMemo(() => filteredClean.map((r) => r.alphaId), [filteredClean])
@@ -209,7 +222,10 @@ export function AlphaPane({
   )
   const shown = showAll ? filtered : filteredSurvivors
   const sorted = useMemo(
-    () => [...shown].sort((a, b) => comparePool(a, b, sort, regionFilter ? filteredPool.by : pool.by, compare)),
+    () =>
+      [...shown].sort((a, b) =>
+        comparePool(a, b, sort, regionFilter ? filteredPool.by : pool.by, compare),
+      ),
     [shown, sort, pool.by, filteredPool.by, compare, regionFilter],
   )
 
@@ -324,6 +340,15 @@ export function AlphaPane({
           >
             <RefreshCwIcon className={cn((refreshing || pool.refreshing) && 'animate-spin')} />
           </Button>
+          {datasetOptions.length > 0 && (
+            <Select
+              value={datasetFilter ?? ''}
+              onChange={(value) => setDatasetFilter(value || null)}
+              items={[{ value: '', label: 'All datasets' }, ...datasetOptions]}
+              label="Filter by dataset"
+              className="max-w-48"
+            />
+          )}
           <Button
             size="sm"
             variant={showAll ? 'primary' : 'secondary'}

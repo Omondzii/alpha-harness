@@ -11,6 +11,7 @@ export type LabTask = Schemas['LabTask']
 export type LabTasks = Schemas['LabTasks']
 export type RankedAlpha = Omit<Schemas['RankedAlpha'], 'settings'> & {
   settings: { universe?: string; neutralization?: string; [key: string]: unknown } | null
+  datasetIds?: string[]
 }
 
 /** A submittable Alpha from any task, with the task that found it. */

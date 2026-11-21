@@ -40,13 +40,8 @@ log = structlog.get_logger(__name__)
 #: about an afternoon that outlives it -- and the Alpha reads as refused forever.
 QUOTA_CHECKS = frozenset({"REGULAR_SUBMISSION", "D0_SUBMISSION"})
 
-#: Checks that label an alpha rather than gate it. The platform reports these as ``WARNING``
-#: on every alpha checked, passing or failing, so judging them would make nothing submittable.
-#:
-#: ``PROD_CORRELATION`` gates nothing a consultant is kept from submitting, so it is excused
-#: too. ``SELF_CORRELATION`` is deliberately *not* here: an alpha too close to the pool
-#: genuinely cannot be submitted, and excusing it would hide the signal that should
-#: reallocate cores.
+#: Checks that label an alpha rather than gate it. Production correlation does not gate
+#: submission; Power Pool candidates are measured locally in the Submittable list.
 IGNORED_CHECKS = frozenset(
     {
         "PROD_CORRELATION",
@@ -59,6 +54,7 @@ IGNORED_CHECKS = frozenset(
         "POWER_POOL_DESCRIPTION_FORMAT",
     }
 )
+SUBMITTABLE_IGNORED_CHECKS = IGNORED_CHECKS | {"SELF_CORRELATION"}
 
 #: BRAIN attaches this check to an Alpha it considers Power Pool eligible, and to no other.
 #: Being Power Pool is independent of being submittable: an Alpha can carry this and still
@@ -71,9 +67,8 @@ IGNORED_CHECKS = frozenset(
 #: one. The classification cannot stand in for it, because BRAIN assigns that only after
 #: submission -- no unsubmitted Alpha carries it.
 #:
-#: Being Power Pool is independent of being submittable, so this never enters :func:`verdict`.
-#: An Alpha whose Sharpe clears Power Pool's 1.0 but not its region's own bar carries this
-#: check *and* a ``LOW_SHARPE`` FAIL: 49 of one sweep's 279 Power Pool Alphas, measured.
+#: Being Power Pool is independent of passing the regular submission checks. Its check is
+#: removed only while tallying this list, then evaluated using the local correlation result.
 POWER_POOL_CHECK = "POWER_POOL_CORRELATION"
 
 
@@ -118,22 +113,32 @@ def checks_of(checks_json: str | None) -> list[dict[str, Any]]:
     return without_quota_checks([c for c in checks if isinstance(c, dict)])
 
 
-def gating_results(checks: list[dict[str, Any]]) -> set[str]:
-    """The results of the checks that decide anything: every one but :data:`IGNORED_CHECKS`."""
+def gating_results(
+    checks: list[dict[str, Any]], ignored_checks: frozenset[str] = IGNORED_CHECKS
+) -> set[str]:
+    """The results of the checks that decide anything."""
     return {
         str(c.get("result", "")).upper()
         for c in checks
-        if str(c.get("name", "")).upper() not in IGNORED_CHECKS
+        if str(c.get("name", "")).upper() not in ignored_checks
     }
 
 
-def verdict(checks: list[dict[str, Any]], simulation_mode: str | None = None) -> Verdict | None:
+def verdict(
+    checks: list[dict[str, Any]],
+    simulation_mode: str | None = None,
+    *,
+    ignored_checks: frozenset[str] = IGNORED_CHECKS,
+) -> Verdict | None:
     """The one rule for whether an alpha can be submitted, from BRAIN's checks.
 
     ``None`` when nothing gating was reported (no checks, or only labels): not shown to be good,
     which callers must never read as fine. Otherwise any refusal decides it, then anything
     still ``PENDING``; an alpha whose every gating check is ``PASS`` or ``WARNING`` is
     submittable.
+
+    ``ignored_checks`` lets a caller use a narrower list-specific policy without changing the
+    regular verdict used elsewhere.
 
     ``simulation_mode`` is needed because the checks alone cannot answer for a quick-mode
     alpha: BRAIN sends it the performance checks and *omits* every submission check, so one
@@ -142,7 +147,7 @@ def verdict(checks: list[dict[str, Any]], simulation_mode: str | None = None) ->
     """
     if simulation_mode == QUICK_MODE:
         return "refused"
-    results = gating_results(checks)
+    results = gating_results(checks, ignored_checks)
     if not results:
         return None
     if results & REFUSING:
@@ -162,9 +167,8 @@ def is_submitted(row: dict[str, Any] | None) -> bool:
     return bool(status) and str(status) != "UNSUBMITTED"
 
 
-#: Verdicts nothing refused: submittable now, or still ``PENDING``. A finished simulation
-#: leaves ``SELF_CORRELATION``, ``PROD_CORRELATION`` and ``IS_LADDER_SHARPE`` ``PENDING``
-#: until BRAIN is asked to check it.
+#: Verdicts nothing refused: submittable now, or still ``PENDING``. Pending Alphas are worth
+#: downloading for later correlation, even though they are not yet ready to submit.
 CLEAN = frozenset({"submittable", "pending"})
 
 
@@ -206,8 +210,15 @@ async def submittable(
     # Every row is judged, never a Sharpe-ordered head of the table: a scan capped at a
     # few hundred rows hid every submittable alpha ranked below it.
     ready_ids, pending, near = await _tally(
-        alphas, f"{' AND '.join(clauses)} AND a.checks IS NOT NULL", params
+        alphas,
+        f"{' AND '.join(clauses)} AND a.checks IS NOT NULL",
+        params,
+        ignore_power_pool=True,
     )
+    ready_ids, power_pool_pending, power_pool_pnl_missing = await _power_pool_gate(
+        alphas, ready_ids
+    )
+    pending += power_pool_pending
     total = len(ready_ids)
     placeholders = ", ".join("?" for _ in ready_ids)
     ready = (
@@ -299,7 +310,9 @@ async def submittable(
         #: Passed over for moving with a better-ranked pick.
         "correlatedPruned": walked - len(picks),
         #: Held-out Alphas with no stored daily PnL, for the caller to download.
-        "pnlMissing": [a for a in order if a not in days],
+        "pnlMissing": list(
+            dict.fromkeys([*(a for a in order if a not in days), *power_pool_pnl_missing])
+        ),
     }
 
 
@@ -345,12 +358,18 @@ SPARK_POINTS = 120
 
 #: alpha_id → ((hash of its checks, simulation mode), verdict, near miss). A verdict changes only
 #: with those two, and parsing every row's JSON on every call cost seconds at 50k Alphas.
-_JUDGED: dict[str, tuple[tuple[int, str | None], Verdict | None, bool]] = {}
+_JUDGED: dict[str, tuple[tuple[int, str | None, bool], Verdict | None, bool]] = {}
 #: Past this many unjudged rows, one scan beats an IN list.
 _RESCAN = 500
 
 
-async def _tally(alphas: AlphaVault, where: str, params: list[Any]) -> tuple[list[str], int, int]:
+async def _tally(
+    alphas: AlphaVault,
+    where: str,
+    params: list[Any],
+    *,
+    ignore_power_pool: bool = False,
+) -> tuple[list[str], int, int]:
     """Submittable ids, promising count and near-miss count, judging only rows not seen as-is.
 
     Judged by :func:`verdict`. A near miss is one or two fixable failures and nothing else
@@ -364,7 +383,7 @@ async def _tally(alphas: AlphaVault, where: str, params: list[Any]) -> tuple[lis
         str(k["alpha_id"])
         for k in keys
         if (seen := _JUDGED.get(str(k["alpha_id"]))) is None
-        or seen[0] != (k["h"], k["simulation_mode"])
+        or seen[0] != (k["h"], k["simulation_mode"], ignore_power_pool)
     ]
     columns = "a.alpha_id, a.checks, a.simulation_mode, hash(a.checks) AS h"
     if len(stale) > _RESCAN:
@@ -378,7 +397,7 @@ async def _tally(alphas: AlphaVault, where: str, params: list[Any]) -> tuple[lis
     else:
         rows = []
     # Off the event loop: a cold start parses every row's JSON, which takes seconds.
-    await asyncio.to_thread(_judge, rows)
+    await asyncio.to_thread(_judge, rows, ignore_power_pool)
 
     ready: list[str] = []
     pending = near = 0
@@ -395,18 +414,100 @@ async def _tally(alphas: AlphaVault, where: str, params: list[Any]) -> tuple[lis
     return ready, pending, near
 
 
-def _judge(rows: list[dict[str, Any]]) -> None:
+def _judge(rows: list[dict[str, Any]], ignore_power_pool: bool = False) -> None:
     for row in rows:
         checks = checks_of(row.get("checks"))
-        found = verdict(checks, row.get("simulation_mode"))
+        if ignore_power_pool:
+            checks = [c for c in checks if str(c.get("name", "")).upper() != POWER_POOL_CHECK]
+        found = verdict(
+            checks, row.get("simulation_mode"), ignored_checks=SUBMITTABLE_IGNORED_CHECKS
+        )
         failed = {
             name
             for c in checks
             if str(c.get("result", "")).upper() in REFUSING
-            and (name := str(c.get("name", "")).upper()) not in IGNORED_CHECKS
+            and (name := str(c.get("name", "")).upper()) not in SUBMITTABLE_IGNORED_CHECKS
         }
         near = found == "refused" and failed <= FIXABLE_CHECKS and len(failed) <= 2
-        _JUDGED[str(row["alpha_id"])] = ((row["h"], row.get("simulation_mode")), found, near)
+        _JUDGED[str(row["alpha_id"])] = (
+            (row["h"], row.get("simulation_mode"), ignore_power_pool),
+            found,
+            near,
+        )
+
+
+async def _power_pool_gate(
+    alphas: AlphaVault, candidate_ids: list[str]
+) -> tuple[list[str], int, list[str]]:
+    """Keep Power Pool candidates only when every comparison is measurable and below 0.5."""
+    if not candidate_ids:
+        return [], 0, []
+
+    from .pool_correlation import below_ceiling
+
+    candidates = await alphas.by_ids(candidate_ids)
+    eligible = [
+        alpha_id
+        for alpha_id in candidate_ids
+        if is_power_pool(checks_of((candidates.get(alpha_id) or {}).get("checks")))
+    ]
+    if not eligible:
+        return candidate_ids, 0, []
+
+    submitted = await alphas.submitted_members()
+    pool_ids = [str(row["alpha_id"]) for row in submitted if row.get("alpha_id")]
+    pool_rows = await alphas.by_ids(pool_ids)
+    pool = {
+        alpha_id: row
+        for alpha_id, row in pool_rows.items()
+        if is_power_pool(checks_of(row.get("checks")))
+    }
+
+    candidates_by_region: dict[str, list[str]] = {}
+    pool_by_region: dict[str, list[str]] = {}
+    pending = 0
+    missing_pnl: list[str] = []
+    accepted = set(candidate_ids) - set(eligible)
+
+    def region_of(row: dict[str, Any]) -> str | None:
+        region = row.get("region")
+        return str(region) if region else None
+
+    for alpha_id in eligible:
+        region = region_of(candidates.get(alpha_id) or {})
+        if region is None:
+            pending += 1
+        else:
+            candidates_by_region.setdefault(region, []).append(alpha_id)
+    for alpha_id, row in pool.items():
+        if region := region_of(row):
+            pool_by_region.setdefault(region, []).append(alpha_id)
+
+    for region, ids in candidates_by_region.items():
+        members = pool_by_region.get(region, [])
+        if not members:
+            accepted.update(ids)
+            continue
+
+        grid = await alphas.pnl_grid([*ids, *members])
+        present = set(grid[0])
+        missing_pnl.extend(a for a in [*members, *ids] if a not in present)
+        meta = {**candidates, **pool}
+        for alpha_id in ids:
+            if alpha_id not in present or any(member not in present for member in members):
+                pending += 1
+                continue
+            clear = below_ceiling(grid, meta, alpha_id, members)
+            if clear is None:
+                pending += 1
+            elif clear:
+                accepted.add(alpha_id)
+
+    return (
+        [alpha_id for alpha_id in candidate_ids if alpha_id in accepted],
+        pending,
+        list(dict.fromkeys(missing_pnl)),
+    )
 
 
 def _sparkline(values: list[float]) -> list[float]:

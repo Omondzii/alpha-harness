@@ -22,14 +22,13 @@ candidate is correlated against TOP500 and TOP2000 members alike, and a USA **D0
 against the USA D1 pool. Delay and universe are not part of the bucket.
 """
 
-from bisect import bisect_left
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from ..vault import metrics, yields
+from ..vault import yields
+from ..vault.pool_correlation import correlation_matrix
 from ..vault.yields import checks_of
-from . import submission_planner
 from .submission_planner import CEILING, ESCAPE
 
 if TYPE_CHECKING:
@@ -68,25 +67,11 @@ def correlate(
     PnL stored still counts in ``against``: a pool that has not been synced reads
     ``unmeasured``, never ``clear``.
     """
-    ids, dates, pnl = grid
+    ids, _, _ = grid
     at = {a: i for i, a in enumerate(ids)}
     left = [a for a in dict.fromkeys(candidates) if a in at]
     right = [p for p in dict.fromkeys(pool) if p in at]
-    rho = np.full((len(left), len(right)), np.nan)
-    if left and right:
-        cols = [at[a] for a in (*left, *right)]
-        traded = ~np.isnan(pnl[:, cols])
-        stored_last = [dates[i] for i in len(dates) - 1 - traded[::-1].argmax(axis=0)]
-        # Closing days move where BRAIN's window ends, as ``portfolio.frame`` counts them, but
-        # are never correlated: that is what makes these match BRAIN's own figures.
-        last = max(
-            metrics.with_closing([(day, 0.0, 0.0)], meta.get(a, {}))[-1][0]
-            for a, day in zip((*left, *right), stored_last, strict=True)
-        )
-        window = pnl[bisect_left(dates, submission_planner.window_start(last)) :]
-        rho = submission_planner.correlations(
-            window[:, cols[: len(left)]], window[:, cols[len(left) :]]
-        )
+    rho = correlation_matrix(grid, meta, left, right)
 
     row_of = {a: i for i, a in enumerate(left)}
     col_of = {p: j for j, p in enumerate(right)}

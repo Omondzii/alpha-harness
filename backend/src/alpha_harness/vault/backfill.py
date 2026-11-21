@@ -60,6 +60,7 @@ RETURNS_CONCURRENCY = 4
 #: fifteen reading "0 of 15" until it is two thirds done, which looks like a hang -- and a
 #: rate-limited job *is* slow enough to be mistaken for one.
 RETURNS_PROGRESS_STEPS = 50
+RETURNS_NOTIFY_EVERY = 10
 
 #: Most alphas one sync lists: past any account's real count, so it is a guard, not a cap.
 IMPORT_LIMIT = 100_000
@@ -417,12 +418,24 @@ class Backfill:
         task.add_done_callback(self._background.discard)
 
     async def _fetch_each(self, alpha_ids: list[str]) -> None:
+        updated = 0
         for alpha_id in alpha_ids:
             try:
-                await self.fetch_returns(alpha_id)
+                updated += bool(await self.fetch_returns(alpha_id))
             # One alpha's series failing must not abandon the rest.
             except Exception as exc:  # noqa: BLE001
                 log.warning("vault.returns_failed", alpha_id=alpha_id, error=str(exc)[:160])
+            if updated >= RETURNS_NOTIFY_EVERY:
+                await self._notify_returns_stored(updated)
+                updated = 0
+        await self._notify_returns_stored(updated)
+
+    async def _notify_returns_stored(self, count: int) -> None:
+        if count:
+            try:
+                await self.on_stored({"stored": True, "returnsUpdated": count})
+            except Exception:
+                log.warning("vault.returns_notify_failed", count=count, exc_info=True)
 
     async def capture(self, alpha_id: str) -> None:
         """Record one alpha as soon as its simulation finishes. Returns once it is stored.

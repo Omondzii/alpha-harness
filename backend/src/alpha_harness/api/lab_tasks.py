@@ -10,6 +10,7 @@ import contextlib
 import itertools
 import json
 import math
+import re
 from typing import Annotated, Any, Literal
 
 import structlog
@@ -167,6 +168,7 @@ class RankedAlpha(Out):
     alpha_id: str | None
     color: str | None = None
     expression: str | None
+    dataset_ids: list[str] = Field(default_factory=list)
     settings: dict[str, Any] | None
     value: float
     sharpe: float | None
@@ -292,6 +294,26 @@ async def _one(state: Any, task_id: int) -> Study:
     if row is None or row.sampler not in TASK_SAMPLERS:
         raise StudyNotFoundError(task_id)
     return row
+
+
+async def _datasets_used(state: Any, expression: str | None, candidates: list[str]) -> list[str]:
+    """The datasets an expression actually reads, among the task's chosen datasets."""
+    if not expression or not candidates:
+        return []
+    fields = set(re.findall(r"[A-Za-z0-9_]+", expression))
+    placeholders = ", ".join("?" for _ in candidates)
+    rows = await state.catalog.query(
+        f"SELECT DISTINCT field_id, dataset_id FROM data_field "  # noqa: S608
+        f"WHERE dataset_id IN ({placeholders})",
+        candidates,
+    )
+    found = {
+        str(row["dataset_id"])
+        for row in rows
+        if row.get("dataset_id") is not None
+        and str(row["field_id"]) in fields
+    }
+    return sorted(found)
 
 
 async def _progress(state: Any, ids: list[int]) -> dict[int, dict[str, Any]]:
@@ -809,6 +831,40 @@ async def top(
     ]
 
 
+@router.get("/{task_id}/dataset-trials")
+async def dataset_trials(
+    task_id: int,
+    state: State,
+    dataset_id: Annotated[str, Query(min_length=1)],
+) -> list[int]:
+    """Trial IDs in this task whose expressions use a field in the selected dataset."""
+    task = await _one(state, task_id)
+    if dataset_id not in (task.sampler_params or {}).get("datasetIds", []):
+        raise refuse(400, "dataset_not_selected", "That dataset was not selected for this task.")
+    field_rows = await state.catalog.query(
+        "SELECT DISTINCT field_id FROM data_field WHERE dataset_id = ?", [dataset_id]
+    )
+    field_ids = {str(row["field_id"]) for row in field_rows}
+    if not field_ids:
+        return []
+
+    async with state.db.session() as session:
+        trials = (
+            await session.execute(
+                select(Trial.id, Trial.expression).where(
+                    Trial.study_id == task_id,
+                    Trial.state == TrialState.COMPLETE,
+                    or_(Trial.generation.is_(None), Trial.generation != 0),
+                )
+            )
+        ).tuples()
+    return [
+        trial_id
+        for trial_id, expression in trials
+        if expression and field_ids.intersection(re.findall(r"[A-Za-z0-9_]+", expression))
+    ]
+
+
 #: Verdicts that let an Alpha into the Power Pool on correlation.
 SATISFIED = frozenset({"clear", "beats"})
 
@@ -972,6 +1028,7 @@ async def submittable_alphas(state: State) -> list[TaskAlpha]:
     current = {a: checks_of(r.get("checks")) for a, r in stored.items() if r.get("checks")}
     prod = await _prod_correlations(state, list(stored), current)
     by_trial = {t.id: t.study_id for t in trials}
+    dataset_cache: dict[tuple[str, tuple[str, ...]], list[str]] = {}
     out: list[TaskAlpha] = []
     seen: set[str] = set()
     for r in ranked(trials, current):
@@ -981,6 +1038,13 @@ async def submittable_alphas(state: State) -> list[TaskAlpha]:
         seen.add(alpha_id)
         task = tasks[by_trial[r["trialId"]]]
         vault = stored.get(alpha_id) or {}
+        expression = r.get("expression")
+        candidates = tuple(sorted(set((task.sampler_params or {}).get("datasetIds") or [])))
+        dataset_key = (str(expression or ""), candidates)
+        if dataset_key not in dataset_cache:
+            dataset_cache[dataset_key] = await _datasets_used(
+                state, expression, list(candidates)
+            )
         out.append(
             TaskAlpha.model_validate(
                 r
@@ -992,6 +1056,7 @@ async def submittable_alphas(state: State) -> list[TaskAlpha]:
                     "testFitness": vault.get("test_fitness"),
                     "prodCorrelation": prod.get(alpha_id),
                     "submitted": is_submitted(vault),
+                    "datasetIds": dataset_cache[dataset_key],
                     "taskId": task.id,
                     "taskName": task.label
                     or task.template_name

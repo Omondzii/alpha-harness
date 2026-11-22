@@ -55,7 +55,7 @@ telemetry.onStatus((connected) =>
   useLive.setState(connected ? { connected } : { connected, simulations: null }),
 )
 telemetry.subscribe('simulations', (payload) => {
-  // The topic also carries `{alphaId, stored}` from backfill; only arrays are snapshots.
+  // The topic also carries backfill storage notices; only arrays are snapshots.
   if (Array.isArray(payload)) useLive.setState({ simulations: payload as SimulationRow[] })
 })
 telemetry.subscribe('tasks', (payload) => useLive.setState({ tasks: payload as TasksSummary }))

@@ -23,6 +23,7 @@ import { labTasks, type RankedAlpha } from '@/screens/tasks/api'
 import { setting } from '@/screens/tasks/columns'
 import { type PowerPoolRow, powerPoolTone, usePowerPool } from '@/screens/tasks/power-pool'
 import { Button, ErrorNotice, LINK, Notice, Panel, Progress } from '@/ui/kit'
+import { Select } from '@/ui/overlay'
 import { type Column, DataTable, type Sort } from '@/ui/table'
 
 const WORKFLOW = 'power-pool-workflow'
@@ -145,6 +146,9 @@ export function AlphaPane({
   onOpenAlpha,
   activeAlphaId,
   regionFilter,
+  datasetNames,
+  datasetIds,
+  datasetTaskId,
 }: {
   title: string
   rows: RankedAlpha[]
@@ -165,9 +169,26 @@ export function AlphaPane({
   activeAlphaId?: string | null
   /** Filter rows by region. If null, show all regions. */
   regionFilter?: string | null
+  /** Friendly names for dataset IDs used by the rows. */
+  datasetNames?: Record<string, string>
+  /** Datasets selected for this task, available before lazy membership is loaded. */
+  datasetIds?: string[]
+  /** When set, look up row membership only after a dataset is selected. */
+  datasetTaskId?: number
 }) {
   const [showAll, setShowAll] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [datasetFilter, setDatasetFilter] = useState<string | null>(null)
+  const datasetMatches = useQuery({
+    queryKey: ['lab-tasks', datasetTaskId, 'dataset-trials', datasetFilter],
+    queryFn: () => {
+      if (datasetTaskId == null || datasetFilter == null) {
+        throw new Error('Dataset filter is not active.')
+      }
+      return labTasks.datasetTrials(datasetTaskId, datasetFilter)
+    },
+    enabled: datasetTaskId != null && datasetFilter != null,
+  })
   const [viewedIds, setViewedIds] = useState(readViewedAlphaIds)
   const saveViewedIds = (next: Set<string>) => {
     setViewedIds(next)
@@ -195,10 +216,25 @@ export function AlphaPane({
     () => clean.filter((r) => passesPool(pool.by.get(r.alphaId))),
     [clean, pool.by],
   )
+  const datasetOptions = useMemo(() => {
+    const ids = new Set(datasetIds ?? rows.flatMap((r) => r.datasetIds ?? []))
+    return [...ids]
+      .sort((a, b) => (datasetNames?.[a] ?? a).localeCompare(datasetNames?.[b] ?? b))
+      .map((id) => ({ value: id, label: datasetNames?.[id] ?? id }))
+  }, [rows, datasetIds, datasetNames])
   const filtered = useMemo(() => {
-    if (!regionFilter) return rows
-    return rows.filter((r) => setting(r, 'region') === regionFilter)
-  }, [rows, regionFilter])
+    let next = rows
+    if (regionFilter) next = next.filter((r) => setting(r, 'region') === regionFilter)
+    if (datasetFilter) {
+      if (datasetTaskId != null) {
+        const matchingTrials = new Set(datasetMatches.data ?? [])
+        next = next.filter((r) => matchingTrials.has(r.trialId))
+      } else {
+        next = next.filter((r) => r.datasetIds?.includes(datasetFilter))
+      }
+    }
+    return next
+  }, [rows, regionFilter, datasetFilter, datasetTaskId, datasetMatches.data])
   const filteredUnsubmitted = useMemo(() => filtered.filter(isUnsubmitted), [filtered])
   const filteredClean = useMemo(() => filteredUnsubmitted.filter(isClean), [filteredUnsubmitted])
   const filteredCleanIds = useMemo(() => filteredClean.map((r) => r.alphaId), [filteredClean])
@@ -209,7 +245,10 @@ export function AlphaPane({
   )
   const shown = showAll ? filtered : filteredSurvivors
   const sorted = useMemo(
-    () => [...shown].sort((a, b) => comparePool(a, b, sort, regionFilter ? filteredPool.by : pool.by, compare)),
+    () =>
+      [...shown].sort((a, b) =>
+        comparePool(a, b, sort, regionFilter ? filteredPool.by : pool.by, compare),
+      ),
     [shown, sort, pool.by, filteredPool.by, compare, regionFilter],
   )
 
@@ -247,9 +286,10 @@ export function AlphaPane({
     else return
     void onRefresh?.()
   })
-  // The rows on show, top first: BRAIN's hourly limit means the ones read first come back first.
-  const unchecked = sorted.flatMap((r) =>
-    isUnsubmitted(r) && r.prodCorrelation == null ? [r.alphaId] : [],
+  // Check only the rows currently shown: active filters and the Show All/Power Pool view.
+  const unchecked = useMemo(
+    () => sorted.flatMap((r) => (isUnsubmitted(r) && r.prodCorrelation == null ? [r.alphaId] : [])),
+    [sorted],
   )
   const checkProd = useMutation({
     mutationFn: () => labTasks.prodCorrelation(unchecked),
@@ -324,6 +364,15 @@ export function AlphaPane({
           >
             <RefreshCwIcon className={cn((refreshing || pool.refreshing) && 'animate-spin')} />
           </Button>
+          {datasetOptions.length > 0 && (
+            <Select
+              value={datasetFilter ?? ''}
+              onChange={(value) => setDatasetFilter(value || null)}
+              items={[{ value: '', label: 'All datasets' }, ...datasetOptions]}
+              label="Filter by dataset"
+              className="max-w-48"
+            />
+          )}
           <Button
             size="sm"
             variant={showAll ? 'primary' : 'secondary'}
@@ -422,8 +471,14 @@ export function AlphaPane({
         }
         sort={sort}
         onSort={onSort}
-        loading={(loading ?? false) || (!showAll && cleanIds.length > 0 && pool.pending)}
-        error={error}
+        loading={
+          (loading ?? false) ||
+          (!showAll && cleanIds.length > 0 && pool.pending) ||
+          (datasetTaskId != null && datasetFilter != null && datasetMatches.isPending)
+        }
+        error={
+          datasetTaskId != null && datasetFilter != null ? (datasetMatches.error ?? error) : error
+        }
         maxHeight="70vh"
         empty={
           showAll || rows.length === 0

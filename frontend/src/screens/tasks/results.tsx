@@ -7,13 +7,13 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
-import { useParams } from '@tanstack/react-router'
+import { useNavigate, useParams } from '@tanstack/react-router'
 import { ArrowLeftIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useNavigate } from '@tanstack/react-router'
 import { cn } from '@/lib/cn'
 import { DASH, fmt } from '@/lib/format'
 import { useRefetchOn } from '@/lib/ws'
+import { useDatasetTree } from '@/screens/data/dataset-chips'
 import { DetailSheet } from '@/screens/pool/detail'
 import { AstInspector } from '@/screens/pool/shared'
 import { AlphaPane } from '@/screens/tasks/alpha-pane'
@@ -180,6 +180,20 @@ export function TaskResultsScreen() {
 
   const tasks = useQuery({ queryKey: ['lab-tasks'], queryFn: labTasks.list })
   const task = tasks.data?.tasks.find((t) => t.id === id)
+  const datasetScope =
+    task?.region && task.delay != null && task.universe
+      ? {
+          instrumentType: 'EQUITY',
+          region: task.region,
+          delay: task.delay,
+          universe: task.universe,
+        }
+      : null
+  const { nameOf } = useDatasetTree(datasetScope)
+  const datasetNames = useMemo(
+    () => Object.fromEntries((task?.datasetIds ?? []).map((id) => [id, nameOf(id)])),
+    [task?.datasetIds, nameOf],
+  )
 
   const top = useQuery({
     queryKey: ['lab-tasks', id, 'results'],
@@ -391,6 +405,9 @@ export function TaskResultsScreen() {
         onOpenAlpha={setAlphaId}
         activeAlphaId={alphaId}
         regionFilter={regionFilter}
+        datasetNames={datasetNames}
+        datasetIds={task?.datasetIds ?? []}
+        datasetTaskId={id}
       />
 
       <CheckSets rows={rows} />

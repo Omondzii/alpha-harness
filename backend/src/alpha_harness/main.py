@@ -37,6 +37,7 @@ from .api import (
     ga,
     lab_tasks,
     llm,
+    payments,
     portfolio,
     power_pool_lab,
     preferences,
@@ -177,6 +178,7 @@ def create_app() -> FastAPI:
     app.include_router(template_lab.router)
     app.include_router(ga.router)
     app.include_router(llm.router)
+    app.include_router(payments.router)
     app.include_router(vault.router)
     app.include_router(portfolio.router)
     app.include_router(quarter.router)

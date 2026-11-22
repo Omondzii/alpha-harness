@@ -8,7 +8,7 @@ dicts: bulk reads where validating every row costs too much (``list_data_fields_
 open-ended or undocumented blobs the callers read selectively.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlencode
 
 import structlog
@@ -43,6 +43,8 @@ V_ALPHA_LIST = "4.0"  # GET /users/{id}/alphas
 #: GET /users/self/alphas/summary. Undocumented; 4.0 returns {unsubmitted, active,
 #: decommissioned} where 2.0 returns {is, os, prod}.
 V_ALPHA_SUMMARY = "4.0"
+#: Payment activity responses include the Regular/Super split at the current version.
+V_PAYMENT_ACTIVITY = "4.0"
 
 #: Daily submitted-Alpha counts, the series behind BRAIN's own "Submitted Alphas".
 SUBMISSIONS_PATH = "/users/self/activities/submissions"
@@ -458,6 +460,21 @@ class BrainEndpoints:
             for r in rows
             if isinstance(r, list) and len(r) >= 2 and str(r[1]).lstrip("-").isdigit()
         ]
+
+    async def payment_activity(
+        self, kind: Literal["base-payment", "other-payment"]
+    ) -> dict[str, Any]:
+        """One of the authenticated payment activity feeds shown on BRAIN's profile."""
+        body = (
+            await self.client.request_retrying(
+                "GET",
+                f"/users/self/activities/{kind}",
+                version=V_PAYMENT_ACTIVITY,
+            )
+        ).body
+        if not isinstance(body, dict):
+            raise ValueError(f"BRAIN returned an invalid {kind} activity response.")
+        return body
 
     async def list_data_sets_all(self, **params: Any) -> list[DataSet]:
         """Every dataset matching a scope, however partial that scope is.

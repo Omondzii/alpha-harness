@@ -1299,6 +1299,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Payment Overview
+         * @description Fetch payment feeds from BRAIN without storing account payment data locally.
+         */
+        get: operations["payment_overview_api_payments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/portfolio/compute": {
         parameters: {
             query?: never;
@@ -2807,6 +2827,26 @@ export interface components {
             /** Remaining */
             remaining: number;
         };
+        /** BasePaymentRecord */
+        BasePaymentRecord: {
+            /** Date */
+            date: string;
+            /** Regularalpha */
+            regularAlpha: number | null;
+            /** Superalpha */
+            superAlpha: number | null;
+        };
+        /** BasePayments */
+        BasePayments: {
+            /** Currency */
+            currency: string;
+            /** Periods */
+            periods: {
+                [key: string]: components["schemas"]["PaymentPeriod"];
+            };
+            /** Records */
+            records: components["schemas"]["BasePaymentRecord"][];
+        };
         /**
          * BrainPayload
          * @description BRAIN's own JSON, passed through as the platform sent it.
@@ -4015,6 +4055,23 @@ export interface components {
             /** Vector */
             vector: string[];
         };
+        /** OtherPaymentRecord */
+        OtherPaymentRecord: {
+            /** Date */
+            date: string;
+            /** Description */
+            description: string;
+            /** Value */
+            value: number;
+        };
+        /** OtherPayments */
+        OtherPayments: {
+            /** Currency */
+            currency: string;
+            /** Records */
+            records: components["schemas"]["OtherPaymentRecord"][];
+            total: components["schemas"]["PaymentPeriod"];
+        };
         /**
          * OutlineRequest
          * @description Fields picked one by one, or whole datasets: a category or subcategory is its datasets.
@@ -4057,6 +4114,24 @@ export interface components {
              * Format: date-time
              */
             start: string;
+        };
+        /** PaymentOverview */
+        PaymentOverview: {
+            base: components["schemas"]["BasePayments"];
+            other: components["schemas"]["OtherPayments"];
+        };
+        /** PaymentPeriod */
+        PaymentPeriod: {
+            /** End */
+            end?: string | null;
+            /** Regularalpha */
+            regularAlpha?: number | null;
+            /** Start */
+            start?: string | null;
+            /** Superalpha */
+            superAlpha?: number | null;
+            /** Value */
+            value?: number | null;
         };
         /** Period */
         Period: {
@@ -7990,6 +8065,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    payment_overview_api_payments_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentOverview"];
                 };
             };
         };

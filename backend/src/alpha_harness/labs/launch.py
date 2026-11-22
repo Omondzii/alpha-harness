@@ -30,6 +30,7 @@ from .params import (
     SUPER_LAB,
     TASK_SAMPLERS,
     TEMPLATE_SAMPLER,
+    TRUNCATION_SWEEP,
 )
 
 if TYPE_CHECKING:
@@ -55,6 +56,7 @@ _TASKS: dict[str, tuple[str, str]] = {
     SETTINGS_SAMPLER: ("settings-sampler", "sharpe"),
     CORRELATION_BREAKER: ("correlation-breaker", "sharpe"),
     DECAY_SWEEP: ("decay-sweep", "sharpe"),
+    TRUNCATION_SWEEP: ("truncation-sweep", "sharpe"),
     SUPER_LAB: ("super-alpha", "sharpe"),
 }
 

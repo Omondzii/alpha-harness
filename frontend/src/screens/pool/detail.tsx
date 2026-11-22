@@ -610,5 +610,5 @@ const settingsItems = (s: AlphaSettings): [string, string][] => [
   ['Delay', fmt.int(s.delay)],
   ['Neutralization', s.neutralization ?? '—'],
   ['Decay', fmt.int(s.decay)],
-  ['Truncation', fmt.ratio(s.truncation)],
+  ['Truncation', fmt.truncation(s.truncation)],
 ]

@@ -182,6 +182,19 @@ export const TRUNCATION: Column<RankedAlpha> = {
   ),
 }
 
+/** A sweep's exact setting should not be rounded like an Alpha metric. */
+export const TRUNCATION_SWEEP: Column<RankedAlpha> = {
+  key: 'truncation',
+  header: 'Truncation',
+  width: 'minmax(84px,0.8fr)',
+  align: 'right',
+  cell: (r) => (
+    <span className="num">
+      {r.settings?.['truncation'] == null ? DASH : fmt.truncation(Number(r.settings['truncation']))}
+    </span>
+  ),
+}
+
 export const DELAY: Column<RankedAlpha> = {
   key: 'delay',
   header: 'Delay',

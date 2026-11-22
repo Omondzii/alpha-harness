@@ -30,6 +30,7 @@ import {
   SETTING_COLUMNS,
   setting,
   TRUNCATION,
+  TRUNCATION_SWEEP as TRUNCATION_SWEEP_COLUMN,
   taskStatus,
   WARNING_COUNT,
 } from '@/screens/tasks/columns'
@@ -41,10 +42,10 @@ const LIMIT = 2000
 
 const market = (r: RankedAlpha) => setting(r, 'region') || DASH
 
-const columns = (agent: boolean): Column<RankedAlpha>[] => [
+const columns = (agent: boolean, sweep: boolean): Column<RankedAlpha>[] => [
   ALPHA_ID,
   ...SETTING_COLUMNS,
-  ...(agent ? [TRUNCATION] : []),
+  ...(sweep ? [TRUNCATION_SWEEP_COLUMN] : agent ? [TRUNCATION] : []),
   PROD_CORRELATION,
   WARNING_COUNT,
   FAILED_CHECKS,
@@ -394,9 +395,9 @@ export function TaskResultsScreen() {
       <AlphaPane
         title="Every Alpha"
         rows={rows}
-        columns={() => columns(Boolean(task?.truncationAgent))}
+        columns={() => columns(Boolean(task?.truncationAgent), task?.lab === 'truncation-sweep')}
         compare={compareAlphas}
-        poolColumnAfter="investability"
+        poolColumnAfter={task?.lab === 'truncation-sweep' ? 'truncation' : 'investability'}
         sort={sort}
         onSort={setSort}
         loading={top.isPending}

@@ -29,6 +29,8 @@ SETTINGS_SAMPLER = "settings-sampler"
 CORRELATION_BREAKER = "correlation-breaker"
 #: Studies that re-run one Alpha at its own settings while varying decay (tools.decay_sweep).
 DECAY_SWEEP = "decay-sweep"
+#: Studies that re-run one Alpha at its own settings while varying truncation.
+TRUNCATION_SWEEP = "truncation-sweep"
 #: Studies that combine your submitted Alphas into SuperAlphas (labs.super_alpha).
 SUPER_LAB = "super-alpha"
 #: Studies that are research-lab tasks, run only from the Tasks tab, by their lab's name.
@@ -40,6 +42,7 @@ TASK_SAMPLERS = {
     SETTINGS_SAMPLER: "Settings Sampler",
     CORRELATION_BREAKER: "Correlation Breaker",
     DECAY_SWEEP: "Decay Sweep",
+    TRUNCATION_SWEEP: "Truncation Sweep",
     SUPER_LAB: "Super Alpha Lab",
 }
 
@@ -148,6 +151,14 @@ class DecaySweepParams(TaskParams):
     decays: list[int] = Field(default_factory=list)
 
 
+class TruncationSweepParams(TaskParams):
+    """Truncation Sweep: one expression at one market, varying only truncation."""
+
+    alpha_id: str = ""
+    truncation: float = 0.08
+    truncations: list[float] = Field(default_factory=list)
+
+
 class SuperParams(TaskParams):
     """Super Alpha Lab: every selection and combo pairing is written up front."""
 
@@ -178,6 +189,7 @@ BY_SAMPLER: dict[str, type[TaskParams]] = {
     SETTINGS_SAMPLER: SettingsParams,
     CORRELATION_BREAKER: BreakerParams,
     DECAY_SWEEP: DecaySweepParams,
+    TRUNCATION_SWEEP: TruncationSweepParams,
     SUPER_LAB: SuperParams,
 }
 

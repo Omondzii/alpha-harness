@@ -1000,6 +1000,26 @@ export interface paths {
         patch: operations["change_api_lab_tasks__task_id__patch"];
         trace?: never;
     };
+    "/api/lab-tasks/{task_id}/dataset-trials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dataset Trials
+         * @description Trial IDs in this task whose expressions use a field in the selected dataset.
+         */
+        get: operations["dataset_trials_api_lab_tasks__task_id__dataset_trials_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lab-tasks/{task_id}/name": {
         parameters: {
             query?: never;
@@ -2073,6 +2093,46 @@ export interface paths {
          * @description Record that an Alpha was submitted on BRAIN, so later plans treat it as permanent.
          */
         post: operations["mark_submitted_api_tools_submission_planner_submitted_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tools/truncation-sweep/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Truncation Sweep Preview
+         * @description Read the Alpha and its settings without spending simulation quota.
+         */
+        post: operations["truncation_sweep_preview_api_tools_truncation_sweep_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tools/truncation-sweep/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Truncation Sweep Task
+         * @description Queue one simulation per truncation, holding the Alpha's other settings fixed.
+         */
+        post: operations["truncation_sweep_task_api_tools_truncation_sweep_tasks_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3801,6 +3861,8 @@ export interface components {
              * @default false
              */
             truncationAgent: boolean;
+            /** Truncations */
+            truncations?: number[];
             /** Universe */
             universe: string | null;
             /** Universes */
@@ -4507,6 +4569,8 @@ export interface components {
             alphaId: string | null;
             /** Color */
             color?: string | null;
+            /** Datasetids */
+            datasetIds?: string[];
             /** Drawdown */
             drawdown: number | null;
             /**
@@ -5364,6 +5428,8 @@ export interface components {
             alphaId: string | null;
             /** Color */
             color?: string | null;
+            /** Datasetids */
+            datasetIds?: string[];
             /** Drawdown */
             drawdown: number | null;
             /**
@@ -5711,6 +5777,50 @@ export interface components {
         TreeRequest: {
             /** Text */
             text: string;
+        };
+        /** TruncationSweepPlan */
+        TruncationSweepPlan: {
+            /** Alphaid */
+            alphaId: string;
+            /** Expression */
+            expression: string;
+            /** Maxcores */
+            maxCores: number;
+            /** Maxtruncation */
+            maxTruncation: number;
+            /** Mintruncation */
+            minTruncation: number;
+            settings: components["schemas"]["DecaySweepSettings"];
+        };
+        /** TruncationSweepPreviewRequest */
+        TruncationSweepPreviewRequest: {
+            /** Alphaid */
+            alphaId: string;
+        };
+        /** TruncationSweepRequest */
+        TruncationSweepRequest: {
+            /** Alphaid */
+            alphaId: string;
+            /**
+             * Cores
+             * @default 8
+             */
+            cores: number;
+            /**
+             * Step
+             * @default 0.01
+             */
+            step: number;
+            /**
+             * Truncationfrom
+             * @default 0.01
+             */
+            truncationFrom: number;
+            /**
+             * Truncationto
+             * @default 0.08
+             */
+            truncationTo: number;
         };
         /**
          * Tuple4
@@ -7355,6 +7465,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LabTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dataset_trials_api_lab_tasks__task_id__dataset_trials_get: {
+        parameters: {
+            query: {
+                dataset_id: string;
+            };
+            header?: never;
+            path: {
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": number[];
                 };
             };
             /** @description Validation Error */
@@ -9048,6 +9191,72 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    truncation_sweep_preview_api_tools_truncation_sweep_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TruncationSweepPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TruncationSweepPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    truncation_sweep_task_api_tools_truncation_sweep_tasks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TruncationSweepRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddedTask"];
+                };
             };
             /** @description Validation Error */
             422: {

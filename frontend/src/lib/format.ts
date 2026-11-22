@@ -43,6 +43,8 @@ export const fmt = {
   int: (v: number | null | undefined) => (isNum(v) ? INT.format(Math.round(v)) : DASH),
   /** 1.58 — Sharpe and Fitness. */
   ratio: (v: number | null | undefined, digits = 2) => (isNum(v) ? v.toFixed(digits) : DASH),
+  /** Truncation is a setting, not a rounded metric: retain its full numeric precision. */
+  truncation: (v: number | null | undefined) => (isNum(v) ? String(v) : DASH),
   /** A fraction as a percent: 0.643 → 64.3% */
   pct: (v: number | null | undefined, digits = 1) =>
     isNum(v) ? `${(v * 100).toFixed(digits)}%` : DASH,

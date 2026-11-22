@@ -26,9 +26,11 @@ from ..labs.params import (
     CORRELATION_BREAKER,
     DECAY_SWEEP,
     SETTINGS_SAMPLER,
+    TRUNCATION_SWEEP,
     BreakerParams,
     DecaySweepParams,
     SettingsParams,
+    TruncationSweepParams,
 )
 from ..schemas import Out
 from ..tools import correlation_breaker, settings_sampler, submission_planner
@@ -227,6 +229,34 @@ class DecaySweepRequest(DecaySweepPreviewRequest):
         return self
 
 
+class TruncationSweepPlan(Out):
+    alpha_id: str
+    expression: str
+    settings: DecaySweepSettings
+    min_truncation: float
+    max_truncation: float
+    max_cores: int
+
+
+class TruncationSweepPreviewRequest(DecaySweepPreviewRequest):
+    pass
+
+
+class TruncationSweepRequest(TruncationSweepPreviewRequest):
+    truncation_from: float = Field(default=0.01, ge=0, le=1, alias="truncationFrom")
+    truncation_to: float = Field(default=0.08, ge=0, le=1, alias="truncationTo")
+    step: float = Field(default=0.01, ge=0.001, le=1)
+    cores: int = Field(default=DEFAULT_SLOTS, ge=1)
+
+    @model_validator(mode="after")
+    def _valid_range(self) -> Self:
+        if self.truncation_from > self.truncation_to:
+            raise ValueError("The truncation range must start at or below its end.")
+        if len(truncations_between(self.truncation_from, self.truncation_to, self.step)) < 2:
+            raise ValueError("Choose a range and step that contain at least two values.")
+        return self
+
+
 def decays_between(start: int, end: int, parity: Literal["any", "even", "odd"]) -> list[int]:
     """Inclusive integer decay range filtered by parity."""
     return [
@@ -236,25 +266,53 @@ def decays_between(start: int, end: int, parity: Literal["any", "even", "odd"]) 
     ]
 
 
-async def _decay_sweep_source(state: Any, alpha_id: str) -> tuple[str, SimulationSettings]:
-    """Read an Alpha's expression and settings for previewing or queueing."""
+def truncations_between(start: float, end: float, step: float) -> list[float]:
+    """Inclusive decimal truncation range, without accumulated float rounding."""
+    from decimal import Decimal
+
+    first, last, increment = map(Decimal, (str(start), str(end), str(step)))
+    values = []
+    current = first
+    while current <= last:
+        values.append(float(current))
+        current += increment
+    return values
+
+
+async def _sweep_source(
+    state: Any, alpha_id: str, sweep: Literal["decay", "truncation"]
+) -> tuple[str, SimulationSettings]:
+    """Read an Alpha's expression and settings for a one-setting sweep."""
+    error_code = f"{sweep}_sweep_blocked"
     if not alpha_id.strip():
-        raise refuse(422, "decay_sweep_blocked", "Give an Alpha ID.")
+        raise refuse(422, error_code, "Give an Alpha ID.")
     body = await state.endpoints.alpha_body(alpha_id)
-    code = body.get("regular") or body.get("combo") or body.get("selection") or {}
-    expression = code.get("code") if isinstance(code, dict) else None
+    alpha_code = body.get("regular") or body.get("combo") or body.get("selection") or {}
+    expression = alpha_code.get("code") if isinstance(alpha_code, dict) else None
     if not isinstance(expression, str) or not expression.strip():
-        raise refuse(422, "decay_sweep_blocked", "This Alpha has no expression to re-run.")
+        raise refuse(422, error_code, "This Alpha has no expression to re-run.")
     raw_settings = body.get("settings")
     if not isinstance(raw_settings, dict):
-        raise refuse(422, "decay_sweep_blocked", "BRAIN returned no simulation settings.")
+        raise refuse(422, error_code, "BRAIN returned no simulation settings.")
     try:
         source = SimulationSettings.model_validate(raw_settings)
     except ValidationError as exc:
         raise refuse(
-            422, "decay_sweep_blocked", "BRAIN returned incomplete simulation settings."
+            422,
+            error_code,
+            "BRAIN returned incomplete simulation settings.",
         ) from exc
     return expression, source
+
+
+async def _decay_sweep_source(state: Any, alpha_id: str) -> tuple[str, SimulationSettings]:
+    """Read an Alpha's expression and settings for decay previewing or queueing."""
+    return await _sweep_source(state, alpha_id, "decay")
+
+
+async def _truncation_sweep_source(state: Any, alpha_id: str) -> tuple[str, SimulationSettings]:
+    """Read an Alpha's expression and settings for truncation previewing or queueing."""
+    return await _sweep_source(state, alpha_id, "truncation")
 
 
 def _decay_sweep_plan(
@@ -331,6 +389,76 @@ async def decay_sweep_task(body: DecaySweepRequest, state: State) -> AddedTask:
         batch_size=(body.cores + 1) * MAX_BATCH,
         template_source=expression,
         template_name=f"Decay Sweep · {body.alpha_id.strip()}",
+        seeds=settings_sampler.seed_trials(requests),
+    )
+
+
+@router.post("/truncation-sweep/preview")
+async def truncation_sweep_preview(
+    body: TruncationSweepPreviewRequest, state: State
+) -> TruncationSweepPlan:
+    """Read the Alpha and its settings without spending simulation quota."""
+    expression, source = await _truncation_sweep_source(state, body.alpha_id.strip())
+    return TruncationSweepPlan.model_validate(
+        {
+            "alphaId": body.alpha_id.strip(),
+            "expression": expression,
+            "settings": DecaySweepSettings(
+                region=source.region,
+                delay=source.delay,
+                universe=source.universe,
+                neutralization=source.neutralization,
+                decay=source.decay,
+                truncation=source.truncation,
+                pasteurization=source.pasteurization,
+                unit_handling=source.unit_handling,
+                nan_handling=source.nan_handling,
+                test_period=source.test_period,
+                max_trade=source.max_trade,
+                max_position=source.max_position,
+                simulation_mode=source.simulation_mode,
+            ),
+            "minTruncation": 0.0,
+            "maxTruncation": 1.0,
+            "maxCores": state.engine.slots,
+        }
+    )
+
+
+@router.post("/truncation-sweep/tasks", status_code=201)
+async def truncation_sweep_task(body: TruncationSweepRequest, state: State) -> AddedTask:
+    """Queue one simulation per truncation, holding the Alpha's other settings fixed."""
+    if body.cores > state.engine.slots:
+        raise refuse(
+            422,
+            "too_many_cores",
+            f"The engine has {state.engine.slots} slots, so a task cannot hold {body.cores}.",
+        )
+    expression, source_settings = await _truncation_sweep_source(state, body.alpha_id.strip())
+    truncations = truncations_between(body.truncation_from, body.truncation_to, body.step)
+    requests = [
+        SimulationRequest(
+            settings=source_settings.model_copy(update={"truncation": truncation}),
+            regular=expression,
+        )
+        for truncation in truncations
+    ]
+    return await add_study(
+        state,
+        now=utcnow(),
+        sampler=TRUNCATION_SWEEP,
+        params=TruncationSweepParams(
+            region=source_settings.region,
+            delay=source_settings.delay,
+            alpha_id=body.alpha_id.strip(),
+            truncation=source_settings.truncation,
+            truncations=truncations,
+            cores=body.cores,
+        ),
+        simulations=len(requests),
+        batch_size=(body.cores + 1) * MAX_BATCH,
+        template_source=expression,
+        template_name=f"Truncation Sweep · {body.alpha_id.strip()}",
         seeds=settings_sampler.seed_trials(requests),
     )
 

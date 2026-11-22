@@ -35,6 +35,7 @@ import {
   QuickBadge,
   SharpeCell,
   TRUNCATION,
+  TRUNCATION_SWEEP as TRUNCATION_SWEEP_COLUMN,
   taskStatus,
 } from '@/screens/tasks/columns'
 import { resultsMarkdown } from '@/screens/tasks/copy'
@@ -66,6 +67,8 @@ import { type Column, DataTable } from '@/ui/table'
 const SETTINGS_SAMPLER = 'settings-sampler'
 /** Matches `labs.params.DECAY_SWEEP`. */
 const DECAY_SWEEP = 'decay-sweep'
+/** Matches `labs.params.TRUNCATION_SWEEP`. */
+const TRUNCATION_SWEEP = 'truncation-sweep'
 /** Matches `labs.params.TEMPLATE_SAMPLER`. */
 const TEMPLATE_SAMPLER = 'template'
 
@@ -78,6 +81,16 @@ const decaySummary = (decays: number[] | undefined) => {
       ? ' odd'
       : ''
   return `${values[0]}–${values[values.length - 1]}${parity} · ${fmt.int(values.length)} values`
+}
+
+const truncationSummary = (truncations: number[] | undefined) => {
+  const values = truncations ?? []
+  const firstValue = values[0]
+  const lastValue = values.at(-1)
+  if (firstValue == null || lastValue == null) return DASH
+  const first = String(Number(firstValue.toFixed(3)))
+  const last = String(Number(lastValue.toFixed(3)))
+  return `${first}–${last} · ${fmt.int(values.length)} values`
 }
 
 export const useLastTaskId = create<{
@@ -288,6 +301,42 @@ const DECAY_SWEEP_COLUMNS: Column<RankedAlpha>[] = [
   },
 ]
 
+/** A Truncation Sweep only varies this setting, so show it beside each run's figures. */
+const TRUNCATION_SWEEP_COLUMNS: Column<RankedAlpha>[] = [
+  ALPHA_ID,
+  TRUNCATION_SWEEP_COLUMN,
+  {
+    key: 'sharpe',
+    header: 'Sharpe',
+    width: '100px',
+    align: 'right',
+    cell: (r) => <SharpeCell value={r.sharpe} />,
+  },
+  {
+    key: 'testSharpe',
+    header: 'Test Sharpe',
+    width: '100px',
+    align: 'right',
+    cell: (r) => (
+      <span className={TEXT_TONE[signTone(r.testSharpe)]}>{fmt.ratio(r.testSharpe)}</span>
+    ),
+  },
+  {
+    key: 'fitness',
+    header: 'Fitness',
+    width: '80px',
+    align: 'right',
+    cell: (r) => fmt.ratio(r.fitness),
+  },
+  {
+    key: 'turnover',
+    header: 'Turnover',
+    width: '88px',
+    align: 'right',
+    cell: (r) => fmt.pct(r.turnover),
+  },
+]
+
 /** What a task searches for leads the table when it is not already shown by another column. */
 const topColumns = (task: LabTask): Column<RankedAlpha>[] =>
   task.lab === SETTINGS_SAMPLER
@@ -296,21 +345,23 @@ const topColumns = (task: LabTask): Column<RankedAlpha>[] =>
       : SAMPLER_COLUMNS
     : task.lab === DECAY_SWEEP
       ? DECAY_SWEEP_COLUMNS
-      : task.objectiveLabel === 'Sharpe' || task.objectiveLabel === 'Train Fitness'
-        ? TOP_COLUMNS
-        : [
-            ...TOP_COLUMNS.slice(0, 2),
-            {
-              key: 'value',
-              header: task.objectiveLabel,
-              width: '112px',
-              align: 'right',
-              cell: (r) => (
-                <span className={TEXT_TONE[signTone(r.value)]}>{fmt.ratio(r.value)}</span>
-              ),
-            },
-            ...TOP_COLUMNS.slice(2),
-          ]
+      : task.lab === TRUNCATION_SWEEP
+        ? TRUNCATION_SWEEP_COLUMNS
+        : task.objectiveLabel === 'Sharpe' || task.objectiveLabel === 'Train Fitness'
+          ? TOP_COLUMNS
+          : [
+              ...TOP_COLUMNS.slice(0, 2),
+              {
+                key: 'value',
+                header: task.objectiveLabel,
+                width: '112px',
+                align: 'right',
+                cell: (r) => (
+                  <span className={TEXT_TONE[signTone(r.value)]}>{fmt.ratio(r.value)}</span>
+                ),
+              },
+              ...TOP_COLUMNS.slice(2),
+            ]
 
 type Act = { action: 'runAll' } | { action: 'run' | 'pause' | 'stop' | 'remove'; task: LabTask }
 
@@ -449,12 +500,16 @@ export function TasksScreen() {
                   <>
                     {' · '}
                     <span className="num">{`${t.region} D${t.delay}`}</span>
-                    {t.lab === DECAY_SWEEP && (
+                    {(t.lab === DECAY_SWEEP || t.lab === TRUNCATION_SWEEP) && (
                       <>
                         {' · '}
                         <span className="num">{t.alphaId}</span>
                         {' · '}
-                        <span className="num">{decaySummary(t.decays)}</span>
+                        <span className="num">
+                          {t.lab === DECAY_SWEEP
+                            ? decaySummary(t.decays)
+                            : truncationSummary(t.truncations)}
+                        </span>
                       </>
                     )}
                     {/* Neither seeds nor datasets: say nothing rather than report "0 datasets"
@@ -906,7 +961,7 @@ function TaskDetail({
     task.name,
     task.labName,
     task.templateName,
-    task.lab === SETTINGS_SAMPLER || task.lab === DECAY_SWEEP
+    task.lab === SETTINGS_SAMPLER || task.lab === DECAY_SWEEP || task.lab === TRUNCATION_SWEEP
       ? task.alphaId
       : `${task.region} D${task.delay}`,
   ]
@@ -918,11 +973,13 @@ function TaskDetail({
         `${fmt.int(task.markets)} Markets · Decay ${task.decay ?? DASH} · ${task.truncationAgent ? 'Truncation Agent' : `Truncation ${task.truncation ?? DASH}`} · NaN Handling ${task.nanHandling ?? DASH}`
       : task.lab === DECAY_SWEEP
         ? `${task.region ?? DASH} D${task.delay ?? DASH} · Decays ${decaySummary(task.decays)} · all other settings held fixed`
-        : task.lab === 'super-alpha'
-          ? `${task.universes?.join(', ') || task.universe || DASH} · ${task.neutralizations?.join(', ') || DASH} · Decay ${task.decay ?? DASH} · Truncation ${task.truncation ?? DASH} · SuperAlphas from your submitted Alphas`
-          : task.seeds > 0
-            ? `${task.universe ?? DASH} · ${fmt.int(task.seeds)} seeds · Population ${fmt.int(task.population)} · Mutation ${fmt.pct(task.mutationRate, 0)}`
-            : `Decay ${task.decay ?? DASH} · ${fmt.int(task.fields)} fields`
+        : task.lab === TRUNCATION_SWEEP
+          ? `${task.region ?? DASH} D${task.delay ?? DASH} · Truncations ${truncationSummary(task.truncations)} · all other settings held fixed`
+          : task.lab === 'super-alpha'
+            ? `${task.universes?.join(', ') || task.universe || DASH} · ${task.neutralizations?.join(', ') || DASH} · Decay ${task.decay ?? DASH} · Truncation ${task.truncation ?? DASH} · SuperAlphas from your submitted Alphas`
+            : task.seeds > 0
+              ? `${task.universe ?? DASH} · ${fmt.int(task.seeds)} seeds · Population ${fmt.int(task.population)} · Mutation ${fmt.pct(task.mutationRate, 0)}`
+              : `Decay ${task.decay ?? DASH} · ${fmt.int(task.fields)} fields`
   const copyResults = () =>
     navigator.clipboard.writeText(resultsMarkdown(task, found)).then(
       () => toast.success(`Copied ${fmt.int(found.length)} results`),
@@ -1031,7 +1088,11 @@ function TaskDetail({
         </div>
         <DataTable
           label={
-            task.lab === SETTINGS_SAMPLER || task.lab === DECAY_SWEEP ? 'Results' : 'Top Alphas'
+            task.lab === SETTINGS_SAMPLER ||
+            task.lab === DECAY_SWEEP ||
+            task.lab === TRUNCATION_SWEEP
+              ? 'Results'
+              : 'Top Alphas'
           }
           rows={found}
           columns={topColumns(task)}
@@ -1046,7 +1107,9 @@ function TaskDetail({
               : 'No Alphas back yet.'
           }
         />
-        {(task.lab === SETTINGS_SAMPLER || task.lab === DECAY_SWEEP) && (
+        {(task.lab === SETTINGS_SAMPLER ||
+          task.lab === DECAY_SWEEP ||
+          task.lab === TRUNCATION_SWEEP) && (
           // A two-column grid rather than padded text: the equals signs line up whatever the
           // labels are and whatever the font does.
           <p className="num grid w-fit grid-cols-[auto_auto] gap-x-2 gap-y-0.5 text-body-compact text-ink-subtle">

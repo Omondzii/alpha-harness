@@ -42,9 +42,19 @@ const LIMIT = 2000
 
 const market = (r: RankedAlpha) => setting(r, 'region') || DASH
 
-const columns = (agent: boolean, sweep: boolean): Column<RankedAlpha>[] => [
+const DECAY_COLUMN: Column<RankedAlpha> = {
+  key: 'decay',
+  header: 'Decay',
+  width: 'minmax(64px,0.6fr)',
+  sortable: true,
+  cell: (r) => <span className="num">{setting(r, 'decay') || DASH}</span>,
+}
+
+const columns = (agent: boolean, sweep: boolean, decaySweep: boolean): Column<RankedAlpha>[] => [
   ALPHA_ID,
-  ...SETTING_COLUMNS,
+  ...SETTING_COLUMNS.map((column) =>
+    decaySweep && column.key === 'delay' ? DECAY_COLUMN : column,
+  ),
   ...(sweep ? [TRUNCATION_SWEEP_COLUMN] : agent ? [TRUNCATION] : []),
   PROD_CORRELATION,
   WARNING_COUNT,
@@ -395,7 +405,13 @@ export function TaskResultsScreen() {
       <AlphaPane
         title="Every Alpha"
         rows={rows}
-        columns={() => columns(Boolean(task?.truncationAgent), task?.lab === 'truncation-sweep')}
+        columns={() =>
+          columns(
+            Boolean(task?.truncationAgent),
+            task?.lab === 'truncation-sweep',
+            task?.lab === 'decay-sweep',
+          )
+        }
         compare={compareAlphas}
         poolColumnAfter={task?.lab === 'truncation-sweep' ? 'truncation' : 'investability'}
         sort={sort}

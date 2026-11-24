@@ -3,7 +3,7 @@
  * allowance and queue, and the work in flight. The live matrix has its own screen.
  */
 
-import { useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { AwardIcon, CopyIcon, CpuIcon, LayersIcon, MaximizeIcon, SendIcon } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 import { useState, type ReactNode } from 'react'
@@ -33,6 +33,7 @@ import {
   Notice,
   Skeleton,
   TEXT_TONE,
+  signTone,
   type Tone,
 } from '@/ui/kit'
 import { Sheet } from '@/ui/overlay'
@@ -53,6 +54,14 @@ export function DashboardScreen() {
     refetchInterval: 60_000,
   })
   const submittedAlphas = submissions.data?.alphas
+  const submittedAlphaPreviews = useQueries({
+    queries: (submittedAlphas ?? []).map(({ alphaId }) => ({
+      queryKey: ['alpha', alphaId, 'preview'],
+      queryFn: () => alphaApi.preview(alphaId),
+      staleTime: 5 * 60 * 1000,
+      retry: false,
+    })),
+  })
   // The quarter BRAIN judges on: submitted Alphas and the pyramids they formed. It moves
   // only when something is submitted, which is rare, so it is not worth polling hard.
   const quarter = useQuery({
@@ -210,51 +219,85 @@ export function DashboardScreen() {
           <Empty title="No Alphas submitted today" />
         ) : (
           <>
-            <ul className="divide-y divide-hairline">
-              {submittedAlphas.map((alpha) => (
-                <li
-                  key={alpha.alphaId}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2 first:pt-0 last:pb-0"
-                >
-                  <div className="flex min-w-0 flex-1 items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="min-w-0 justify-start truncate px-1 font-medium text-link hover:underline"
+            <ul className="overflow-x-auto divide-y divide-hairline">
+              {submittedAlphas.map((alpha, index) => {
+                const preview = submittedAlphaPreviews[index]
+                const stats = preview?.data?.inSample
+                return (
+                  <li key={alpha.alphaId} className="flex min-w-[900px] items-center gap-2">
+                    <span className="flex w-[180px] shrink-0 items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="min-w-0 justify-start truncate px-1 font-medium text-link hover:underline"
+                        title={alpha.name ?? alpha.alphaId}
+                        onClick={() => setSelectedAlphaId(alpha.alphaId)}
+                      >
+                        {alpha.alphaId}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="shrink-0"
+                        aria-label={`Copy Alpha ID ${alpha.alphaId}`}
+                        title={`Copy ${alpha.alphaId}`}
+                        onClick={() =>
+                          void navigator.clipboard.writeText(alpha.alphaId).then(
+                            () => toast.success(`Copied ${alpha.alphaId}`),
+                            (error: unknown) =>
+                              toast.error(`Could not copy ${alpha.alphaId}`, {
+                                description: errorMessage(error),
+                              }),
+                          )
+                        }
+                      >
+                        <CopyIcon aria-hidden />
+                      </Button>
+                    </span>
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-center gap-4 py-2 text-left transition-colors hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-primary"
                       onClick={() => setSelectedAlphaId(alpha.alphaId)}
                     >
-                      {alpha.name || alpha.alphaId}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Copy Alpha ID ${alpha.alphaId}`}
-                      title={`Copy ${alpha.alphaId}`}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        void navigator.clipboard.writeText(alpha.alphaId).then(
-                          () => toast.success(`Copied ${alpha.alphaId}`),
-                          (error: unknown) =>
-                            toast.error(`Could not copy ${alpha.alphaId}`, {
-                              description: errorMessage(error),
-                            }),
-                        )
-                      }}
-                    >
-                      <CopyIcon aria-hidden />
-                    </Button>
-                  </div>
-                  {alpha.type && (
-                    <Badge tone={alpha.type === 'SUPER' ? 'profit' : 'muted'}>{alpha.type}</Badge>
-                  )}
-                  {alpha.status && <Badge tone="outline">{alpha.status}</Badge>}
-                  {alpha.dateSubmitted && (
-                    <span className="num text-body-compact text-ink-subtle">
-                      {fmt.dateTime(alpha.dateSubmitted)}
-                    </span>
-                  )}
-                </li>
-              ))}
+                      <span className="flex shrink-0 items-center gap-2">
+                        {alpha.type && (
+                          <Badge tone={alpha.type === 'SUPER' ? 'profit' : 'muted'}>
+                            {alpha.type}
+                          </Badge>
+                        )}
+                        {alpha.status && <Badge tone="outline">{alpha.status}</Badge>}
+                      </span>
+                      {stats ? (
+                        <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                          <SubmittedMetric label="Sharpe" value={fmt.ratio(stats.sharpe)} />
+                          <SubmittedMetric
+                            label="Returns"
+                            value={fmt.pct(stats.returns)}
+                            tone={signTone(stats.returns)}
+                          />
+                          <SubmittedMetric label="Fitness" value={fmt.ratio(stats.fitness)} />
+                          <SubmittedMetric label="Margin" value={fmt.bps(stats.margin)} />
+                          <SubmittedMetric label="Turnover" value={fmt.pct(stats.turnover)} />
+                          <SubmittedMetric label="Drawdown" value={fmt.pct(stats.drawdown)} />
+                        </span>
+                      ) : preview?.isError ? (
+                        <span className="min-w-0 flex-1 text-body-compact text-status-warning">
+                          Performance metrics unavailable
+                        </span>
+                      ) : (
+                        <span className="min-w-0 flex-1 text-body-compact text-ink-subtle">
+                          Loading performance metrics…
+                        </span>
+                      )}
+                      {alpha.dateSubmitted && (
+                        <span className="num w-[112px] shrink-0 text-right text-body-compact text-ink-subtle">
+                          {fmt.dateTime(alpha.dateSubmitted)}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                )
+              })}
             </ul>
             {submissions.data.truncated && (
               <p className="text-body-compact text-ink-subtle">
@@ -359,12 +402,25 @@ function SubmittedAlphaSheet({
             )}
           </div>
           {alpha.inSample && (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Metric label="Sharpe" value={fmt.ratio(alpha.inSample.sharpe)} />
-              <Metric label="Fitness" value={fmt.ratio(alpha.inSample.fitness)} />
-              <Metric label="Turnover" value={fmt.pct(alpha.inSample.turnover)} />
-              <Metric label="Returns" value={fmt.pct(alpha.inSample.returns)} />
-            </div>
+            <section className="flex flex-col gap-3 border-t border-hairline pt-4">
+              <h3 className="text-title">In-sample performance</h3>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <Metric
+                  label="Sharpe"
+                  value={fmt.ratio(alpha.inSample.sharpe)}
+                  tone={signTone(alpha.inSample.sharpe)}
+                  boxed
+                />
+                <Metric label="Fitness" value={fmt.ratio(alpha.inSample.fitness)} boxed />
+                <Metric label="Turnover" value={fmt.pct(alpha.inSample.turnover)} boxed />
+                <Metric
+                  label="Returns"
+                  value={fmt.pct(alpha.inSample.returns)}
+                  tone={signTone(alpha.inSample.returns)}
+                  boxed
+                />
+              </div>
+            </section>
           )}
           <div className="flex flex-wrap gap-2">
             <Button
@@ -457,6 +513,25 @@ function SubmittedAlphaSheet({
         </div>
       ) : null}
     </Sheet>
+  )
+}
+
+function SubmittedMetric({
+  label,
+  value,
+  tone = 'muted',
+}: {
+  label: string
+  value: string
+  tone?: Tone
+}) {
+  return (
+    <span className="flex min-w-[64px] shrink-0 flex-col gap-0.5">
+      <span className="text-[0.625rem] font-medium uppercase tracking-wide text-ink-subtle">
+        {label}
+      </span>
+      <span className={cn('num text-body-compact', TEXT_TONE[tone])}>{value}</span>
+    </span>
   )
 }
 

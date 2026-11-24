@@ -50,6 +50,7 @@ export function SubmitAlphaButton({
       setConfirmOpen(false)
       toast.success(`BRAIN submitted ${alphaId}`)
       void queryClient.invalidateQueries({ queryKey: ['pool'] })
+      void queryClient.invalidateQueries({ queryKey: ['submissions', 'today'] })
       void queryClient.invalidateQueries({ queryKey: ['alpha', alphaId] })
       void queryClient.invalidateQueries({ queryKey: ['submittable-alphas'] })
       void queryClient.invalidateQueries({ queryKey: ['portfolio'] })

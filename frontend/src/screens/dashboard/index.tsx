@@ -12,19 +12,24 @@ import { http } from '@/api/http'
 import { cn } from '@/lib/cn'
 import { fmt } from '@/lib/format'
 
-type QuarterStanding = components['schemas']['QuarterStanding']
-
 import { useNow } from '@/lib/now'
 import { useRefetchOn } from '@/lib/ws'
 import { ErrorNotice, Page, Panel, Progress, Skeleton, TEXT_TONE, type Tone } from '@/ui/kit'
 import { GettingStarted } from './getting-started'
 import { WorkInFlight } from './work'
 
+type QuarterStanding = components['schemas']['QuarterStanding']
+
 export function DashboardScreen() {
   const day = useQuery({ queryKey: ['today'], queryFn: () => today.get() })
   useRefetchOn('simulations', ['today'], 10_000)
   const sims = day.data?.simulations
-
+  const submissions = useQuery({
+    queryKey: ['submissions', 'today'],
+    queryFn: today.submissions,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  })
   // The quarter BRAIN judges on: submitted Alphas and the pyramids they formed. It moves
   // only when something is submitted, which is rare, so it is not worth polling hard.
   const quarter = useQuery({
@@ -48,14 +53,41 @@ export function DashboardScreen() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           icon={<AwardIcon />}
-          label="Submitted Alphas"
-          loading={quarter.isPending}
-          value={quarter.isError ? '—' : fmt.int(quarter.data?.submitted)}
-          tone={quarter.data?.submitted ? 'profit' : 'neutral'}
+          label="Submitted Today"
+          loading={submissions.isPending}
+          value={
+            submissions.isError ? (
+              '—'
+            ) : (
+              <span className="flex flex-col gap-1">
+                <span className="text-body font-medium">
+                  Regular{' '}
+                  <span className="num" style={{ color: 'var(--color-status-running)' }}>
+                    {fmt.int(submissions.data?.regular)}/{fmt.int(submissions.data?.regularLimit)}
+                  </span>
+                </span>
+                <span className="text-body font-medium">
+                  SuperAlpha{' '}
+                  <span className="num" style={{ color: 'var(--color-pnl-positive)' }}>
+                    {fmt.int(submissions.data?.superAlpha)}/
+                    {fmt.int(submissions.data?.superAlphaLimit)}
+                  </span>
+                </span>
+              </span>
+            )
+          }
           hint={
-            quarter.isError
-              ? 'The count could not load.'
-              : `Submitted in ${quarter.data?.label ?? 'this quarter'}`
+            submissions.isError ? (
+              'Submission counts could not load.'
+            ) : (
+              <>
+                US Eastern day · resets in{' '}
+                <ResetCountdown
+                  seconds={submissions.data?.resetsInSeconds ?? 0}
+                  since={submissions.dataUpdatedAt}
+                />
+              </>
+            )
           }
         />
         <StatTile

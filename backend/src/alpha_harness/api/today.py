@@ -10,12 +10,13 @@ by the platform's own number once the first batch comes back. ``exact`` says whi
 are looking at.
 """
 
+import asyncio
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Query
 
-from ..brain.filters import PLATFORM_TZ
+from ..brain.filters import PLATFORM_TZ, AlphaQuery, Filter, platform_midnight
 from ..catalog.queries import scope_label
 from ..db.models import SyncStatus
 from ..llm.budget import seconds_until_reset
@@ -30,6 +31,8 @@ router = APIRouter(prefix="/api/today", tags=["today"])
 #: A consultant's daily simulation allowance, shown until the day's first simulation POST
 #: returns its x-ratelimit-* headers.
 DAILY_ALLOWANCE = 5000
+REGULAR_SUBMISSION_LIMIT = 4
+SUPER_ALPHA_SUBMISSION_LIMIT = 1
 
 
 class Feature(Out):
@@ -61,6 +64,14 @@ class TodaySimulations(Out):
     resets_at: str
     engine: EngineStatus
     headline: str
+
+
+class TodaySubmissions(Out):
+    regular: int
+    regular_limit: int
+    super_alpha: int
+    super_alpha_limit: int
+    resets_in_seconds: int
 
 
 class Assistant(Out):
@@ -204,6 +215,33 @@ async def bar(state: State) -> Bar:
             "simulations": {k: sims[k] for k in ("remaining", "limit", "exact", "queued")},
             "resetsInSeconds": sims["resetsInSeconds"],
         }
+    )
+
+
+@router.get("/submissions")
+async def submissions_today(state: State) -> TodaySubmissions:
+    """Regular and Super Alpha submissions since midnight on BRAIN's clock."""
+    start = platform_midnight()
+
+    async def count(sim_type: str) -> int:
+        result = await state.endpoints.list_alphas(
+            AlphaQuery(
+                limit=1,
+                filters=[
+                    Filter("dateSubmitted", ">=", start),
+                    Filter("type", "=", sim_type),
+                ],
+            )
+        )
+        return result["count"]
+
+    regular, super_alpha = await asyncio.gather(count("REGULAR"), count("SUPER"))
+    return TodaySubmissions(
+        regular=regular,
+        regular_limit=REGULAR_SUBMISSION_LIMIT,
+        super_alpha=super_alpha,
+        super_alpha_limit=SUPER_ALPHA_SUBMISSION_LIMIT,
+        resets_in_seconds=round(seconds_until_reset(tz=PLATFORM_TZ)),
     )
 
 

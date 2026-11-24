@@ -5,7 +5,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { ClockIcon, SearchIcon, ZapIcon } from 'lucide-react'
+import { AwardIcon, ClockIcon, SearchIcon, ZapIcon } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { simulations, today } from '@/api/core'
 import { cn } from '@/lib/cn'
@@ -205,6 +205,12 @@ function Clocks() {
     queryFn: () => today.bar(),
     refetchInterval: 30_000,
   })
+  const submissions = useQuery({
+    queryKey: ['submissions', 'today'],
+    queryFn: today.submissions,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  })
   useRefetchOn('simulations', ['bar'], 3000)
   useRefetchOn('session', ['bar'])
   // Seconds since the last fetch, so the countdowns tick between polls.
@@ -219,6 +225,42 @@ function Clocks() {
   return (
     // Below 1024px the two clocks hide; below 640px the quota figures drop their visible labels.
     <div className="flex items-center gap-2 text-body-compact text-ink-subtle">
+      <Clock
+        icon={<AwardIcon className="size-3.5 text-primary" aria-hidden />}
+        label="Submitted Today"
+        hint={
+          submissions.isError
+            ? 'Could not load today’s submitted Alpha counts.'
+            : 'Regular and SuperAlpha submissions today. Blue: Regular (limit 4); green: SuperAlpha (limit 1). Resets on BRAIN’s US Eastern day.'
+        }
+      >
+        {submissions.isPending ? (
+          <span className="text-ink-subtle">…</span>
+        ) : submissions.isError ? (
+          <span className="text-status-warning">Unavailable</span>
+        ) : (
+          <span
+            role="img"
+            aria-label={`Regular Alpha submissions: ${submissions.data.regular} of ${submissions.data.regularLimit}; SuperAlpha submissions: ${submissions.data.superAlpha} of ${submissions.data.superAlphaLimit}`}
+            className="num inline-flex items-center gap-2 font-medium text-ink"
+          >
+            <span className="inline-flex items-center gap-1" aria-hidden="true">
+              <span
+                className="size-1.5 rounded-pill"
+                style={{ background: 'var(--color-status-running)' }}
+              />
+              {fmt.int(submissions.data.regular)}/{fmt.int(submissions.data.regularLimit)}
+            </span>
+            <span className="inline-flex items-center gap-1" aria-hidden="true">
+              <span
+                className="size-1.5 rounded-pill"
+                style={{ background: 'var(--color-pnl-positive)' }}
+              />
+              {fmt.int(submissions.data.superAlpha)}/{fmt.int(submissions.data.superAlphaLimit)}
+            </span>
+          </span>
+        )}
+      </Clock>
       <Clock
         icon={<ClockIcon className="size-3.5 text-ink-subtle" aria-hidden />}
         label="BRAIN Session"

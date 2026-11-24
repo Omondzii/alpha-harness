@@ -4,21 +4,29 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
-import { AwardIcon, CpuIcon, LayersIcon, SendIcon } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { AwardIcon, CopyIcon, CpuIcon, LayersIcon, MaximizeIcon, SendIcon } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { useState, type ReactNode } from 'react'
+import { toast } from 'sonner'
 import { BRAIN_ALPHA_URL } from '@/screens/pool/api'
 import { today } from '@/api/core'
 import type { components } from '@/api/generated'
-import { http } from '@/api/http'
+import { errorMessage, http } from '@/api/http'
 import { cn } from '@/lib/cn'
 import { fmt } from '@/lib/format'
 
 import { useNow } from '@/lib/now'
 import { useRefetchOn } from '@/lib/ws'
+import { alpha as alphaApi } from '@/screens/alpha/api'
+import { AstInspector, checkFigure } from '@/screens/pool/shared'
 import {
   Badge,
+  Button,
+  checkTone,
   Empty,
   ErrorNotice,
+  KV,
+  Metric,
   Page,
   Panel,
   Progress,
@@ -27,12 +35,14 @@ import {
   TEXT_TONE,
   type Tone,
 } from '@/ui/kit'
+import { Sheet } from '@/ui/overlay'
 import { GettingStarted } from './getting-started'
 import { WorkInFlight } from './work'
 
 type QuarterStanding = components['schemas']['QuarterStanding']
 
 export function DashboardScreen() {
+  const [selectedAlphaId, setSelectedAlphaId] = useState<string | null>(null)
   const day = useQuery({ queryKey: ['today'], queryFn: () => today.get() })
   useRefetchOn('simulations', ['today'], 10_000)
   const sims = day.data?.simulations
@@ -204,19 +214,36 @@ export function DashboardScreen() {
               {submittedAlphas.map((alpha) => (
                 <li
                   key={alpha.alphaId}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 first:pt-0 last:pb-0"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2 first:pt-0 last:pb-0"
                 >
-                  <a
-                    href={BRAIN_ALPHA_URL(alpha.alphaId)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="min-w-0 flex-1 truncate text-body font-medium text-link hover:underline"
-                  >
-                    {alpha.name || alpha.alphaId}
-                  </a>
-                  {alpha.name && (
-                    <span className="num text-body-compact text-ink-subtle">{alpha.alphaId}</span>
-                  )}
+                  <div className="flex min-w-0 flex-1 items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="min-w-0 justify-start truncate px-1 font-medium text-link hover:underline"
+                      onClick={() => setSelectedAlphaId(alpha.alphaId)}
+                    >
+                      {alpha.name || alpha.alphaId}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Copy Alpha ID ${alpha.alphaId}`}
+                      title={`Copy ${alpha.alphaId}`}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        void navigator.clipboard.writeText(alpha.alphaId).then(
+                          () => toast.success(`Copied ${alpha.alphaId}`),
+                          (error: unknown) =>
+                            toast.error(`Could not copy ${alpha.alphaId}`, {
+                              description: errorMessage(error),
+                            }),
+                        )
+                      }}
+                    >
+                      <CopyIcon aria-hidden />
+                    </Button>
+                  </div>
                   {alpha.type && (
                     <Badge tone={alpha.type === 'SUPER' ? 'profit' : 'muted'}>{alpha.type}</Badge>
                   )}
@@ -238,7 +265,198 @@ export function DashboardScreen() {
           </>
         )}
       </Panel>
+      <SubmittedAlphaSheet
+        alphaId={selectedAlphaId}
+        onClose={() => setSelectedAlphaId(null)}
+      />
     </Page>
+  )
+}
+
+function SubmittedAlphaSheet({
+  alphaId,
+  onClose,
+}: {
+  alphaId: string | null
+  onClose: () => void
+}) {
+  const query = useQuery({
+    queryKey: ['alpha', alphaId, 'preview'],
+    queryFn: () => {
+      if (!alphaId) throw new Error('Choose an Alpha to preview.')
+      return alphaApi.preview(alphaId)
+    },
+    enabled: alphaId !== null,
+    retry: false,
+  })
+  const alpha = query.data
+  const settings = alpha?.settings
+  const settingItems = settings
+    ? Object.entries(settings)
+        .filter(([, value]) => value !== null && value !== undefined)
+        .map(([key, value]) => [key, String(value)] as [string, string])
+    : []
+
+  return (
+    <Sheet
+      open={alphaId !== null}
+      onOpenChange={(open) => !open && onClose()}
+      title={
+        <div className="flex items-center gap-2">
+          <span className="num">{alphaId ?? 'Alpha'}</span>
+          {alphaId && (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label={`Copy ${alphaId}`}
+              onClick={() =>
+                void navigator.clipboard.writeText(alphaId).then(
+                  () => toast.success(`Copied ${alphaId}`),
+                  (error: unknown) =>
+                    toast.error(`Could not copy ${alphaId}`, {
+                      description: errorMessage(error),
+                    }),
+                )
+              }
+            >
+              <CopyIcon aria-hidden />
+            </Button>
+          )}
+        </div>
+      }
+      footer={
+        alphaId && (
+          <Button
+            size="sm"
+            variant="secondary"
+            render={
+              <a
+                href={alpha?.brainUrl ?? BRAIN_ALPHA_URL(alphaId)}
+                target="_blank"
+                rel="noopener noreferrer"
+              />
+            }
+          >
+            Open in BRAIN
+          </Button>
+        )
+      }
+    >
+      {query.isPending ? (
+        <Skeleton className="h-60 w-full" label="Loading Alpha preview" />
+      ) : query.isError ? (
+        <ErrorNotice error={query.error} title="Could not load this Alpha" />
+      ) : alpha ? (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {alpha.type && <Badge tone={alpha.type === 'SUPER' ? 'profit' : 'muted'}>{alpha.type}</Badge>}
+            <Badge tone="outline">{alpha.status ?? 'UNKNOWN'}</Badge>
+            {alpha.stage && <Badge tone="muted">{alpha.stage}</Badge>}
+            {alpha.dateSubmitted && (
+              <span className="num text-body-compact text-ink-subtle">
+                Submitted {fmt.dateTime(alpha.dateSubmitted)}
+              </span>
+            )}
+          </div>
+          {alpha.inSample && (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Metric label="Sharpe" value={fmt.ratio(alpha.inSample.sharpe)} />
+              <Metric label="Fitness" value={fmt.ratio(alpha.inSample.fitness)} />
+              <Metric label="Turnover" value={fmt.pct(alpha.inSample.turnover)} />
+              <Metric label="Returns" value={fmt.pct(alpha.inSample.returns)} />
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="primary"
+              render={<Link to="/alpha/$alphaId" params={{ alphaId: alpha.alphaId }} />}
+            >
+              <MaximizeIcon aria-hidden />
+              Open Full Page
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              render={
+                <a
+                  href={alpha.brainUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                />
+              }
+            >
+              Open in BRAIN
+            </Button>
+          </div>
+          {alpha.type === 'SUPER' ? (
+            <section className="flex flex-col gap-3 border-t border-hairline pt-4">
+              <div className="flex flex-col gap-2">
+                <h3 className="text-title">Selection Expression</h3>
+                <AstInspector expression={alpha.selectionExpression} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <h3 className="text-title">Combo Expression</h3>
+                <AstInspector expression={alpha.code} />
+              </div>
+            </section>
+          ) : (
+            <section className="flex flex-col gap-2 border-t border-hairline pt-4">
+              <h3 className="text-title">Expression</h3>
+              <AstInspector expression={alpha.code} />
+            </section>
+          )}
+          {settingItems.length > 0 && (
+            <section className="flex flex-col gap-2 border-t border-hairline pt-4">
+              <h3 className="text-title">Settings</h3>
+              <KV items={settingItems} />
+            </section>
+          )}
+          {alpha.dataFields && (
+            <section className="flex flex-col gap-2 border-t border-hairline pt-4">
+              <h3 className="text-title">Data fields</h3>
+              {alpha.dataFields.length > 0 ? (
+                <ul className="flex flex-col divide-y divide-hairline-subtle">
+                  {alpha.dataFields.map((field) => (
+                    <li key={field} className="py-1.5 text-body">
+                      <code className="num break-all text-ink">{field}</code>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-body-compact text-ink-subtle">No data fields used.</p>
+              )}
+            </section>
+          )}
+          {alpha.checks.length > 0 && (
+            <section className="flex flex-col gap-2 border-t border-hairline pt-4">
+              <h3 className="text-title">Submission Checks</h3>
+              <ul className="flex flex-col divide-y divide-hairline-subtle">
+                {alpha.checks.map((check, index) => {
+                  const result = typeof check.result === 'string' ? check.result : 'PENDING'
+                  return (
+                    <li
+                      key={`${check.name}-${index}`}
+                      className="flex flex-wrap items-center gap-2 py-1.5 text-body"
+                    >
+                      <Badge tone={checkTone(result)}>{result}</Badge>
+                      <span className="num text-ink">{check.name}</span>
+                      {typeof check.value === 'number' && (
+                        <span className="num text-body-compact text-ink-subtle">
+                          {checkFigure(check.name, check.value)}
+                          {typeof check.limit === 'number' &&
+                            ` / ${checkFigure(check.name, check.limit)}`}
+                        </span>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          )}
+        </div>
+      ) : null}
+    </Sheet>
   )
 }
 

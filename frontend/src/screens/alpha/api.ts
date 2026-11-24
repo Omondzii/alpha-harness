@@ -54,6 +54,8 @@ export const notApplicable = (error: unknown) =>
   error instanceof ApiError && [410, 412].includes(Number(error.body['platformStatus']))
 
 export const alpha = {
+  preview: (alphaId: string) =>
+    http.get<AlphaInfo>(`/api/alphas/${id(alphaId)}/preview`),
   page: (alphaId: string, refresh = false) =>
     http.get<AlphaView>(`/api/alphas/${id(alphaId)}/page${qs({ refresh: refresh || null })}`),
   save: (alphaId: string, body: AlphaProperties) =>

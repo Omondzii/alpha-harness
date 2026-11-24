@@ -422,6 +422,21 @@ async def summary(state: State) -> BrainPayload:
     return BrainPayload(await state.endpoints.alphas_summary())
 
 
+@router.get("/{alpha_id}/preview")
+async def preview(alpha_id: str, state: State) -> AlphaInfo:
+    """One Alpha's properties and checks, without fetching its performance series."""
+    body, _ = await _cached(
+        state,
+        f"alpha:{alpha_id}",
+        lambda: state.endpoints.alpha_body(alpha_id),
+        refresh=False,
+    )
+    stored = (await state.alphas.by_ids([alpha_id])).get(alpha_id) or {}
+    if resolved := checks_of(stored.get("checks")):
+        body = {**body, "is": {**(body.get("is") or {}), "checks": resolved}}
+    return _info(alpha_id, body)
+
+
 @router.get("/{alpha_id}/page")
 async def page(alpha_id: str, state: State, refresh: Refresh = False) -> AlphaView:
     """Everything the Alpha page shows, in one call.

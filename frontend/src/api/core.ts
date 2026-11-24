@@ -53,6 +53,15 @@ export const today = {
       superAlpha: number
       superAlphaLimit: number
       resetsInSeconds: number
+      total: number
+      alphas: {
+        alphaId: string
+        name: string | null
+        type: string | null
+        status: string | null
+        dateSubmitted: string | null
+      }[]
+      truncated: boolean
     }>('/api/today/submissions'),
   /** The header clocks. Cheap. */
   bar: () => http.get<BarStatus>('/api/today/bar'),

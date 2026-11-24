@@ -6,6 +6,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { AwardIcon, CpuIcon, LayersIcon, SendIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { BRAIN_ALPHA_URL } from '@/screens/pool/api'
 import { today } from '@/api/core'
 import type { components } from '@/api/generated'
 import { http } from '@/api/http'
@@ -14,7 +15,18 @@ import { fmt } from '@/lib/format'
 
 import { useNow } from '@/lib/now'
 import { useRefetchOn } from '@/lib/ws'
-import { ErrorNotice, Page, Panel, Progress, Skeleton, TEXT_TONE, type Tone } from '@/ui/kit'
+import {
+  Badge,
+  Empty,
+  ErrorNotice,
+  Page,
+  Panel,
+  Progress,
+  Notice,
+  Skeleton,
+  TEXT_TONE,
+  type Tone,
+} from '@/ui/kit'
 import { GettingStarted } from './getting-started'
 import { WorkInFlight } from './work'
 
@@ -30,6 +42,7 @@ export function DashboardScreen() {
     staleTime: 60_000,
     refetchInterval: 60_000,
   })
+  const submittedAlphas = submissions.data?.alphas
   // The quarter BRAIN judges on: submitted Alphas and the pyramids they formed. It moves
   // only when something is submitted, which is rare, so it is not worth polling hard.
   const quarter = useQuery({
@@ -162,6 +175,69 @@ export function DashboardScreen() {
       </div>
 
       <WorkInFlight />
+      <Panel
+        title="Alphas Submitted Today"
+        description="Submitted on BRAIN today, including Alphas submitted outside Alpha Harness."
+        actions={
+          submissions.data && (
+            <span className="num text-body-compact text-ink-subtle">
+              {fmt.int(submissions.data.total)}
+            </span>
+          )
+        }
+        bodyClassName="flex flex-col gap-3"
+      >
+        {submissions.isPending ? (
+          <Skeleton className="h-20 w-full" label="Loading today's submitted Alphas" />
+        ) : submissions.isError ? (
+          <ErrorNotice error={submissions.error} title="Today's submissions could not load" />
+        ) : !Array.isArray(submittedAlphas) ? (
+          <Notice tone="warn" title="Submitted Alpha list is unavailable">
+            The running backend returned the counts but not the Alpha list. Restart Alpha Harness
+            after updating it to load the list.
+          </Notice>
+        ) : submittedAlphas.length === 0 ? (
+          <Empty title="No Alphas submitted today" />
+        ) : (
+          <>
+            <ul className="divide-y divide-hairline">
+              {submittedAlphas.map((alpha) => (
+                <li
+                  key={alpha.alphaId}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 first:pt-0 last:pb-0"
+                >
+                  <a
+                    href={BRAIN_ALPHA_URL(alpha.alphaId)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="min-w-0 flex-1 truncate text-body font-medium text-link hover:underline"
+                  >
+                    {alpha.name || alpha.alphaId}
+                  </a>
+                  {alpha.name && (
+                    <span className="num text-body-compact text-ink-subtle">{alpha.alphaId}</span>
+                  )}
+                  {alpha.type && (
+                    <Badge tone={alpha.type === 'SUPER' ? 'profit' : 'muted'}>{alpha.type}</Badge>
+                  )}
+                  {alpha.status && <Badge tone="outline">{alpha.status}</Badge>}
+                  {alpha.dateSubmitted && (
+                    <span className="num text-body-compact text-ink-subtle">
+                      {fmt.dateTime(alpha.dateSubmitted)}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {submissions.data.truncated && (
+              <p className="text-body-compact text-ink-subtle">
+                Showing the latest {fmt.int(submittedAlphas.length)} of{' '}
+                {fmt.int(submissions.data.total)} submitted Alphas.
+              </p>
+            )}
+          </>
+        )}
+      </Panel>
     </Page>
   )
 }

@@ -66,12 +66,23 @@ class TodaySimulations(Out):
     headline: str
 
 
+class TodaySubmittedAlpha(Out):
+    alpha_id: str
+    name: str | None
+    type: str | None
+    status: str | None
+    date_submitted: str | None
+
+
 class TodaySubmissions(Out):
     regular: int
     regular_limit: int
     super_alpha: int
     super_alpha_limit: int
     resets_in_seconds: int
+    total: int
+    alphas: list[TodaySubmittedAlpha]
+    truncated: bool
 
 
 class Assistant(Out):
@@ -223,7 +234,7 @@ async def submissions_today(state: State) -> TodaySubmissions:
     """Regular and Super Alpha submissions since midnight on BRAIN's clock."""
     start = platform_midnight()
 
-    async def count(sim_type: str) -> int:
+    async def list_type(sim_type: str) -> int:
         result = await state.endpoints.list_alphas(
             AlphaQuery(
                 limit=1,
@@ -235,13 +246,38 @@ async def submissions_today(state: State) -> TodaySubmissions:
         )
         return result["count"]
 
-    regular, super_alpha = await asyncio.gather(count("REGULAR"), count("SUPER"))
+    query = AlphaQuery(
+        limit=100,
+        order="-dateSubmitted",
+        hidden=None,
+        filters=[Filter("dateSubmitted", ">=", start)],
+    )
+    regular, super_alpha, submitted = await asyncio.gather(
+        list_type("REGULAR"),
+        list_type("SUPER"),
+        state.endpoints.list_alphas(query),
+    )
+    rows = submitted["results"]
+    alphas = [
+        TodaySubmittedAlpha(
+            alpha_id=str(row["id"]),
+            name=row.get("name"),
+            type=row.get("type"),
+            status=row.get("status"),
+            date_submitted=row.get("dateSubmitted"),
+        )
+        for row in rows
+        if isinstance(row, dict) and row.get("id")
+    ]
     return TodaySubmissions(
         regular=regular,
         regular_limit=REGULAR_SUBMISSION_LIMIT,
         super_alpha=super_alpha,
         super_alpha_limit=SUPER_ALPHA_SUBMISSION_LIMIT,
         resets_in_seconds=round(seconds_until_reset(tz=PLATFORM_TZ)),
+        total=submitted["count"],
+        alphas=alphas,
+        truncated=submitted["count"] > len(rows),
     )
 
 

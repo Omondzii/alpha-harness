@@ -20,6 +20,7 @@ from .brain.endpoints import SIMULATION_TYPES
 from .brain.errors import BrainError
 from .db.models import BrainSessionRow, Credential, MetadataCache, utcnow
 from .sealing import SealError
+from .tasks import spawn
 
 if TYPE_CHECKING:
     from .brain.endpoints import BrainEndpoints
@@ -54,6 +55,7 @@ class AuthService:
         self.auth = Authenticator(endpoints)
         self._session = SessionInfo.anonymous()
         self._user_profile: dict[str, Any] | None = None
+        self._operator_warmup: asyncio.Task[None] | None = None
         #: One session change at a time: a UI sign-in, a silent re-login and a status
         #: refresh would otherwise overwrite each other, leaving the loser's credential current.
         self._lock = asyncio.Lock()
@@ -65,13 +67,14 @@ class AuthService:
 
     async def get_user_profile(self) -> dict[str, Any]:
         """Cached user profile from BRAIN /users/{userId}."""
-        if not self._session.authenticated or not self._session.user_id:
+        user_id = self._session.user_id
+        if not self._session.authenticated or not user_id:
             return {}
         if self._user_profile is not None:
             return self._user_profile
         try:
-            profile = await self.endpoints.get_user(self._session.user_id)
-            if profile:
+            profile = await self.endpoints.get_user(user_id)
+            if profile and self._session.authenticated and self._session.user_id == user_id:
                 self._user_profile = profile
                 first = str(profile.get("firstName") or "").strip()
                 last = str(profile.get("lastName") or "").strip()
@@ -124,12 +127,13 @@ class AuthService:
             return self._session
         self._session = restored
         await self._save_cookies()
-        await self._warm_operators()
+        self._operator_warmup = spawn(self._warm_operators(), name="startup-operators")
         return restored
 
     async def login(self, email: str | None = None, password: str | None = None) -> SessionInfo:
         """Sign in, storing the credential if it was supplied here and accepted."""
         async with self._lock:
+            await self._cancel_operator_warmup()
             supplied = bool(email and password)
             if not supplied:
                 credential = await self.get_credential()
@@ -217,6 +221,7 @@ class AuthService:
 
     async def logout(self) -> None:
         async with self._lock:
+            await self._cancel_operator_warmup()
             self._user_profile = None
             await self.endpoints.logout()
             await self._clear_cookies()
@@ -233,6 +238,12 @@ class AuthService:
             await self.metadata.refresh_operators()
         except Exception:
             log.warning("operators.refresh_failed", exc_info=True)
+
+    async def _cancel_operator_warmup(self) -> None:
+        task, self._operator_warmup = self._operator_warmup, None
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
     # -- cookie persistence ----------------------------------------------
 

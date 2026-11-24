@@ -19,7 +19,9 @@ from ..brain.filters import PLATFORM_TZ
 from ..catalog.queries import scope_label
 from ..db.models import SyncStatus
 from ..llm.budget import seconds_until_reset
+from ..realtime import TOPIC_SESSION
 from ..schemas import EngineStatus, Out, SyncRunRow
+from ..tasks import spawn
 from .deps import State
 from .llm import LLMBudget
 
@@ -171,10 +173,13 @@ async def today(
     else:
         step = "ready"
 
+    if session.authenticated and not session.full_name:
+        spawn(_warm_profile(state), name="today-user-profile")
+
     return Today.model_validate(
         {
             "step": step,
-            "you": await _you(state, session, stored_email),
+            "you": _you(session, stored_email),
             "simulations": await simulations_today(state),
             "assistant": await _assistant(state, keys, enabled_keys),
             "catalog": await _catalog(state, instrument_type, region, delay, universe),
@@ -244,14 +249,11 @@ async def _catalog(
     }
 
 
-async def _you(state: State, session: Any, stored_email: str | None) -> dict[str, Any]:
+def _you(session: Any, stored_email: str | None) -> dict[str, Any]:
     granted = list(session.permissions or [])
-    # Falling back to the local part of the email keeps the greeting working when the
-    # profile is unavailable, rather than showing an account id to someone new.
+    # The profile is fetched in the background so a slow BRAIN response cannot hold up the
+    # first screen. The email fallback is replaced after the session topic is broadcast.
     full_name = session.full_name
-    if not full_name and session.authenticated:
-        await state.auth.get_user_profile()
-        full_name = session.full_name
     if not full_name and stored_email:
         full_name = stored_email.split("@")[0].replace(".", " ").title()
 
@@ -273,6 +275,14 @@ async def _you(state: State, session: Any, stored_email: str | None) -> dict[str
         "canRunTenAtOnce": "MULTI_SIMULATION" in granted,
         "verificationUrl": session.verification_url,
     }
+
+
+async def _warm_profile(state: State) -> None:
+    user_id = state.auth.session.user_id
+    profile = await state.auth.get_user_profile()
+    session = state.auth.session
+    if profile and session.authenticated and session.user_id == user_id and session.full_name:
+        await state.hub.broadcast(TOPIC_SESSION, session.to_dict())
 
 
 async def simulations_today(state: State) -> dict[str, Any]:

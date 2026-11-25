@@ -193,6 +193,8 @@ class RankedAlpha(Out):
     #: The highest correlation with any consultant Alpha in production, which BRAIN wants
     #: below 0.7. Null until BRAIN has been asked: it limits these checks per hour.
     prod_correlation: float | None = None
+    #: Whether BRAIN attached its Power Pool correlation check to this Alpha.
+    power_pool: bool = False
     feasible: bool | None
     failed_checks: list[str]
     #: Of ``failed_checks``, those that gate submission. A check BRAIN fails for a reason
@@ -827,6 +829,7 @@ async def top(
                 "testSharpe": (stored.get(r["alphaId"]) or {}).get("test_sharpe"),
                 "testFitness": (stored.get(r["alphaId"]) or {}).get("test_fitness"),
                 "prodCorrelation": prod.get(r["alphaId"]),
+                "powerPool": power_pool.is_power_pool(stored.get(r["alphaId"])),
                 "submitted": is_submitted(stored.get(r["alphaId"])),
             }
         )

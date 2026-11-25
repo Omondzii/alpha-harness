@@ -168,6 +168,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/alphas/{alpha_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview
+         * @description One Alpha's properties and checks, without fetching its performance series.
+         */
+        get: operations["preview_api_alphas__alpha_id__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/alphas/{alpha_id}/simulate": {
         parameters: {
             query?: never;
@@ -1944,6 +1964,26 @@ export interface paths {
          *     catalog lookups that page needs have no business running every thirty seconds.
          */
         get: operations["bar_api_today_bar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/today/submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Submissions Today
+         * @description Regular and Super Alpha submissions since midnight on BRAIN's clock.
+         */
+        get: operations["submissions_today_api_today_submissions_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4672,6 +4712,11 @@ export interface components {
              * @default false
              */
             pending: boolean;
+            /**
+             * Powerpool
+             * @default false
+             */
+            powerPool: boolean;
             /** Prodcorrelation */
             prodCorrelation?: number | null;
             /**
@@ -5531,6 +5576,11 @@ export interface components {
              * @default false
              */
             pending: boolean;
+            /**
+             * Powerpool
+             * @default false
+             */
+            powerPool: boolean;
             /** Prodcorrelation */
             prodCorrelation?: number | null;
             /**
@@ -5824,6 +5874,38 @@ export interface components {
             unspoken: number;
             /** Used */
             used: number;
+        };
+        /** TodaySubmissions */
+        TodaySubmissions: {
+            /** Alphas */
+            alphas: components["schemas"]["TodaySubmittedAlpha"][];
+            /** Regular */
+            regular: number;
+            /** Regularlimit */
+            regularLimit: number;
+            /** Resetsinseconds */
+            resetsInSeconds: number;
+            /** Superalpha */
+            superAlpha: number;
+            /** Superalphalimit */
+            superAlphaLimit: number;
+            /** Total */
+            total: number;
+            /** Truncated */
+            truncated: boolean;
+        };
+        /** TodaySubmittedAlpha */
+        TodaySubmittedAlpha: {
+            /** Alphaid */
+            alphaId: string;
+            /** Datesubmitted */
+            dateSubmitted: string | null;
+            /** Name */
+            name: string | null;
+            /** Status */
+            status: string | null;
+            /** Type */
+            type: string | null;
         };
         /**
          * TreeNode
@@ -6330,6 +6412,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrainPayload"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_api_alphas__alpha_id__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alpha_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlphaInfo"];
                 };
             };
             /** @description Validation Error */
@@ -9032,6 +9145,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Bar"];
+                };
+            };
+        };
+    };
+    submissions_today_api_today_submissions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TodaySubmissions"];
                 };
             };
         };

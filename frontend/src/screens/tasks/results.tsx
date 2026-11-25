@@ -425,6 +425,8 @@ export function TaskResultsScreen() {
         datasetNames={datasetNames}
         datasetIds={task?.datasetIds ?? []}
         datasetTaskId={id}
+        showConfidenceScore
+        scoreCohortMayBePartial={rows.length >= LIMIT}
       />
 
       <CheckSets rows={rows} />

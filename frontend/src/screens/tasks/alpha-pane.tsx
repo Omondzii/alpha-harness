@@ -21,6 +21,7 @@ import { useLive } from '@/lib/live'
 import { BRAIN_ALPHA_URL } from '@/screens/pool/api'
 import { labTasks, type RankedAlpha } from '@/screens/tasks/api'
 import { setting } from '@/screens/tasks/columns'
+import { type ConfidenceScore, confidenceScores } from '@/screens/tasks/confidence-score'
 import { type PowerPoolRow, powerPoolTone, usePowerPool } from '@/screens/tasks/power-pool'
 import { Button, ErrorNotice, LINK, Notice, Panel, Progress } from '@/ui/kit'
 import { Select } from '@/ui/overlay'
@@ -59,8 +60,16 @@ function comparePool(
   b: RankedAlpha,
   sort: Sort,
   by: ReadonlyMap<string, PowerPoolRow>,
+  scores: ReadonlyMap<string, ConfidenceScore>,
   compare: (a: RankedAlpha, b: RankedAlpha, sort: Sort) => number,
 ): number {
+  if (sort.key === 'confidenceScore') {
+    const x = (a.alphaId ? scores.get(a.alphaId)?.value : null) ?? null
+    const y = (b.alphaId ? scores.get(b.alphaId)?.value : null) ?? null
+    if (x == null) return y == null ? 0 : 1
+    if (y == null) return -1
+    return sort.desc ? y - x : x - y
+  }
   if (sort.key !== 'poolCorrelation') return compare(a, b, sort)
   const pick = (r: RankedAlpha) => (r.alphaId ? by.get(r.alphaId)?.correlation : null) ?? null
   const x = pick(a)
@@ -149,6 +158,8 @@ export function AlphaPane({
   datasetNames,
   datasetIds,
   datasetTaskId,
+  showConfidenceScore = false,
+  scoreCohortMayBePartial = false,
 }: {
   title: string
   rows: RankedAlpha[]
@@ -175,6 +186,10 @@ export function AlphaPane({
   datasetIds?: string[]
   /** When set, look up row membership only after a dataset is selected. */
   datasetTaskId?: number
+  /** Show the task-scoped, percentile-based Confidence Score. */
+  showConfidenceScore?: boolean
+  /** The task result response reached its cap, so the percentile cohort may be partial. */
+  scoreCohortMayBePartial?: boolean
 }) {
   const [showAll, setShowAll] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -212,6 +227,10 @@ export function AlphaPane({
   const clean = useMemo(() => unsubmitted.filter(isClean), [unsubmitted])
   const cleanIds = useMemo(() => clean.map((r) => r.alphaId), [clean])
   const pool = usePowerPool(cleanIds)
+  const scoreById = useMemo(
+    () => (showConfidenceScore ? confidenceScores(rows, pool.by) : new Map()),
+    [rows, pool.by, showConfidenceScore],
+  )
   const survivors = useMemo(
     () => clean.filter((r) => passesPool(pool.by.get(r.alphaId))),
     [clean, pool.by],
@@ -247,9 +266,9 @@ export function AlphaPane({
   const sorted = useMemo(
     () =>
       [...shown].sort((a, b) =>
-        comparePool(a, b, sort, regionFilter ? filteredPool.by : pool.by, compare),
+        comparePool(a, b, sort, regionFilter ? filteredPool.by : pool.by, scoreById, compare),
       ),
-    [shown, sort, pool.by, filteredPool.by, compare, regionFilter],
+    [shown, sort, pool.by, filteredPool.by, scoreById, compare, regionFilter],
   )
 
   const refresh = () => Promise.all([onRefresh?.(), cleanIds.length ? pool.refresh() : null])
@@ -341,6 +360,64 @@ export function AlphaPane({
       },
       ...columns(),
     ]
+    if (showConfidenceScore) {
+      own.push({
+        key: 'confidenceScore',
+        header: (
+          <span
+            title={`30% After-Cost Sharpe + 25% Test Sharpe + 15% Margin + 10% lower Turnover + 20% Return/Drawdown (capped at 5). Percentiles are computed within this task and the same region, delay and universe. This is a relative confidence indicator, not submission approval.${
+              scoreCohortMayBePartial
+                ? ' The task result response reached its 2,000-row cap, so the cohort may be partial.'
+                : ''
+            }`}
+          >
+            Confidence Score
+          </span>
+        ),
+        width: 'minmax(132px,1fr)',
+        align: 'right',
+        sortable: true,
+        cell: (r) => {
+          const found = r.alphaId ? scoreById.get(r.alphaId) : undefined
+          if (!found || found.status === 'excluded') return DASH
+          if (found.status === 'pending') {
+            return (
+              <span
+                className="text-ink-subtle"
+                title="Power Pool correlation is unmeasured or pending."
+              >
+                Pending
+              </span>
+            )
+          }
+          if (found.status === 'blocked') {
+            return (
+              <span
+                className="text-pnl-negative-text"
+                title="Power Pool correlation blocks this Alpha."
+              >
+                Blocked
+              </span>
+            )
+          }
+          if (found.status === 'incomplete') {
+            return (
+              <span className="text-status-warning" title={found.detail}>
+                Incomplete
+              </span>
+            )
+          }
+          return (
+            <span
+              className="inline-flex items-center justify-end gap-1.5"
+              title={`Relative to ${found.cohortSize} score-complete candidates in this market.`}
+            >
+              <span className="num">{found.value.toFixed(1)}</span>
+            </span>
+          )
+        },
+      })
+    }
     if (!pool.found) return own
     const at = own.findIndex((c) => c.key === poolColumnAfter)
     const cut = at === -1 ? own.length : at + 1

@@ -365,7 +365,7 @@ export function AlphaPane({
         key: 'confidenceScore',
         header: (
           <span
-            title={`30% After-Cost Sharpe + 25% Test Sharpe + 15% Margin + 10% lower Turnover + 20% Return/Drawdown (capped at 5). Percentiles are computed within this task and the same region, delay and universe. This is a relative confidence indicator, not submission approval.${
+            title={`30% After-Cost Sharpe + 25% Test Sharpe + 15% Margin + 10% lower Turnover + 20% Return/Drawdown. Percentiles are computed within this task and the same region, delay and universe. This is a relative confidence indicator, not submission approval.${
               scoreCohortMayBePartial
                 ? ' The task result response reached its 2,000-row cap, so the cohort may be partial.'
                 : ''

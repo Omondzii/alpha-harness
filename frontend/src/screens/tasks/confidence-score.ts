@@ -1,7 +1,5 @@
 import type { PowerPoolRow, RankedAlpha } from '@/screens/tasks/api'
 
-const RETURN_DRAWDOWN_CAP = 5
-
 export type ConfidenceScore =
   | {
       value: number
@@ -158,7 +156,7 @@ export function confidenceScores(
         testSharpe,
         margin,
         turnover,
-        returnDrawdown: Math.min(RETURN_DRAWDOWN_CAP, returns / drawdown),
+        returnDrawdown: returns / drawdown,
       },
     }
     const group = groups.get(candidate.market) ?? []
